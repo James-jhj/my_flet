@@ -49,7 +49,6 @@ jobs:
               "lunardate",
               "requests",
               "mutagen",
-              "pyncm",
           ]
 
           [tool.flet]
