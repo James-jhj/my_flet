@@ -977,11 +977,11 @@ def main(page: ft.Page):
         # 按钮行 - 换行显示（使用 Column 或 Wrap）
         music_buttons = ft.Row(
             controls=[
-                ft.Button("📁 选择", on_click=pick_music_file, expand=True),
-                ft.Button("🗑️ 清除", on_click=clear_music, expand=True),
-                ft.Button("▶️ 试听", on_click=test_play, expand=True),
+                ft.Button("📁 选择", on_click=pick_music_file, expand=True, style=ft.ButtonStyle(text_style=ft.TextStyle(size=12),)),
+                ft.Button("🗑️ 清除", on_click=clear_music, expand=True, style=ft.ButtonStyle(text_style=ft.TextStyle(size=12),)),
+                ft.Button("▶️ 试听", on_click=test_play, expand=True, style=ft.ButtonStyle(text_style=ft.TextStyle(size=12),)),
             ],
-            spacing=10,
+            spacing=8,
         )
         
         # ========== 音乐搜索相关控件 ==========
@@ -990,13 +990,7 @@ def main(page: ft.Page):
             hint_text="输入歌曲名或歌手名",
             expand=True,
         )
-        search_btn = ft.Button(
-            "🔍 搜索", 
-            expand=True,
-            style=ft.ButtonStyle(
-                text_style=ft.TextStyle(size=11.5),
-            )
-        )
+        search_btn = ft.Button("🔍 搜索", expand=True)
         search_results_dropdown = ft.Dropdown(
             label="搜索结果",
             hint_text="点击搜索后选择歌曲",
@@ -1014,7 +1008,7 @@ def main(page: ft.Page):
             print(f"[搜索] 按钮被点击！关键词: '{keyword}'")
             
             if not keyword:
-                show_snack_bar("请输入歌曲名称")
+                show_snack_bar("请输入歌曲名称")  # 直接调用，不在线程中
                 return
             
             search_btn.disabled = True
@@ -1051,14 +1045,15 @@ def main(page: ft.Page):
                                 display_text = f"{song_name} - {artist}" if artist else song_name
                                 options.append(ft.dropdown.Option(music_id, display_text))
                         
-                        page.run_task(lambda: update_search_results(options))
+                        # 使用 threading.Timer 在主线程中更新UI
+                        threading.Timer(0.1, lambda: update_search_results(options)).start()
                     else:
-                        page.run_task(lambda: show_snack_bar("搜索失败，请重试"))
+                        threading.Timer(0.1, lambda: show_snack_bar("搜索失败，请重试")).start()
                 except Exception as e:
                     print(f"搜索出错: {e}")
-                    page.run_task(lambda: show_snack_bar(f"搜索出错: {str(e)}"))
+                    threading.Timer(0.1, lambda: show_snack_bar(f"搜索出错: {str(e)}")).start()
                 finally:
-                    page.run_task(lambda: reset_search_btn())
+                    threading.Timer(0.1, reset_search_btn).start()
             
             def update_search_results(options):
                 search_results_dropdown.options = options
@@ -1106,7 +1101,6 @@ def main(page: ft.Page):
         
         def do_download(e):
             selected_id = search_results_dropdown.value
-            print(f"[下载] 开始下载，选中ID: {selected_id}")
             if not selected_id:
                 return
             
@@ -1124,98 +1118,57 @@ def main(page: ft.Page):
             download_btn.text = "下载中..."
             page.update()
             
-            # 定义同步函数
-            def show_message_sync(msg):
-                page.snack_bar = ft.SnackBar(content=ft.Text(msg), open=True)
-                page.update()
-            
-            def update_music_path_sync(path):
-                music_field.value = path
-                music_field.update()
-            
-            def reset_download_button_sync():
-                download_btn.disabled = False
-                download_btn.text = "📥 下载并应用"
-                download_btn.update()
-            
-            # 创建协程包装器
-            async def show_message(msg):
-                show_message_sync(msg)
-            
-            async def update_music_path(path):
-                update_music_path_sync(path)
-            
-            async def reset_download_button():
-                reset_download_button_sync()
-            
             def download_thread():
                 try:
-                    print("[下载线程] 开始执行")
                     downloader = LyricsDownloader(page=page, show_snack_bar=show_snack_bar)
                     song_url = selected_song['url']
-                    print(f"[下载线程] 歌曲URL: {song_url}")
-                    
                     mp3_url = downloader.get_mp3_url_simple(song_url)
-                    print(f"[下载线程] 获取到MP3链接: {mp3_url}")
                     
                     if not mp3_url:
-                        #page.run_task(show_message, "无法获取下载链接，请稍后重试")
-                        show_snack_bar("❌ 未能获取到MP3链接")
-                        page.run_task(reset_download_button)
+                        threading.Timer(0.1, lambda: show_snack_bar("❌ 未能获取到MP3链接")).start()
+                        threading.Timer(0.1, reset_download_button).start()
                         return
-                    show_snack_bar("✅ 获取到MP3链接")
-
-                    # ========== 根据平台选择保存路径 ==========
+                    
                     if platform.system() == "Android":
-                        # 华为手机等Android设备 - 使用公共音乐目录
-                        # 获取外部存储路径（通常是 /storage/emulated/0）
                         external_storage = os.environ.get("EXTERNAL_STORAGE", "/storage/emulated/0")
                         download_dir = Path(external_storage) / "Music" / "BirthdayReminder"
-                        print(f"[下载线程] Android平台，保存到: {download_dir}")
                     else:
-                        # Windows 电脑 - 使用用户音乐目录
                         download_dir = Path.home() / "Music" / "BirthdayReminder"
-                        print(f"[下载线程] Windows平台，保存到: {download_dir}")
                     
-                    # 创建目录
                     download_dir.mkdir(parents=True, exist_ok=True)
                     
-                    # 清理文件名中的非法字符
                     filename = f"{selected_song['name']}-{selected_song['artist']}.mp3"
                     filename = re.sub(r'[\\/*?:"<>|]', '', filename)
                     filepath = download_dir / filename
-                    print(f"[下载线程] 保存路径: {filepath}")
                     
-                    page.run_task(show_message, f"正在下载: {selected_song['name']}...")
-                    
-                    # 使用你提供的方法下载MP3文件
                     success = download_mp3_file_with_headers(mp3_url, filepath, downloader)
                     
                     if success:
-                        # 更新音乐文件路径
-                        page.run_task(update_music_path, str(filepath))
+                        threading.Timer(0.1, lambda: setattr(music_field, 'value', str(filepath))).start()
+                        threading.Timer(0.1, lambda: setattr(selected_file_display, 'value', f"已选择: {filename}")).start()
                         
-                        # 尝试下载歌词
                         lyrics = downloader.search_and_get_lyrics(selected_song['name'], selected_song['artist'])
                         if lyrics:
                             lrc_path = filepath.with_suffix('.lrc')
                             with open(lrc_path, 'w', encoding='utf-8') as f:
                                 f.write(lyrics)
-                            print(f"[下载] 歌词已保存: {lrc_path}")
                         
-                        page.run_task(show_message, f"下载完成: {filename}")
+                        threading.Timer(0.1, lambda: show_snack_bar(f"下载完成: {filename}")).start()
                     else:
-                        page.run_task(show_message, f"下载失败: 文件大小为0或链接无效")
+                        threading.Timer(0.1, lambda: show_snack_bar("下载失败")).start()
                     
-                    page.run_task(reset_download_button)
+                    threading.Timer(0.1, reset_download_button).start()
                     
                 except Exception as e:
                     print(f"下载出错: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    #page.run_task(show_message, f"下载失败: {str(e)}")
-                    show_snack_bar(f"❌ 下载失败: {str(e)}")
-                    page.run_task(reset_download_button)
+                    threading.Timer(0.1, lambda: show_snack_bar(f"下载失败: {str(e)}")).start()
+                    threading.Timer(0.1, reset_download_button).start()
+            
+            def reset_download_button():
+                download_btn.disabled = False
+                download_btn.text = "📥 下载并应用"
+                download_btn.update()
+                page.update()
             
             threading.Thread(target=download_thread, daemon=True).start()
         
