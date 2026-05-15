@@ -895,24 +895,68 @@ def main(page: ft.Page):
         nonlocal dialog_container, selected_event
         close_dialog()
         
-        name_field = ft.TextField(label="姓名", value=selected_event.name if selected_event else "", width=250)
+         # 创建 FilePicker 并添加到页面服务
+        file_picker = ft.FilePicker()
+        page.services.append(file_picker)
+        
+        # 显示选中的文件名
+        selected_file_display = ft.Text(value="", size=12, color=ft.Colors.GREEN_700)
+        
+        # 处理文件选择
+        async def handle_pick_files(e):
+            files = await file_picker.pick_files(allow_multiple=False, allowed_extensions=["mp3", "wav", "flac", "m4a"])
+            if files:
+                selected_file = files[0].path
+                music_field.value = selected_file
+                selected_file_display.value = f"已选择: {os.path.basename(selected_file)}"
+                selected_file_display.color = ft.Colors.GREEN_700
+                page.update()
+                show_snack_bar(f"已选择: {os.path.basename(selected_file)}")
+            else:
+                selected_file_display.value = "未选择文件"
+                selected_file_display.color = ft.Colors.GREY_600
+                page.update()
+        
+        # 选择音乐文件的函数
+        def pick_music_file(e):
+            asyncio.create_task(handle_pick_files(e))
+        
+        # 清除音乐文件
+        def clear_music(e):
+            music_field.value = ""
+            selected_file_display.value = ""
+            page.update()
+            show_snack_bar("已清除音乐文件路径")
+        
+        # 试听
+        def test_play(e):
+            file_path = music_field.value.strip()
+            if file_path and os.path.exists(file_path):
+                play_music(file_path, loop=False)
+            elif file_path and file_path.startswith(('http://', 'https://')):
+                play_music(file_path, loop=False)
+            else:
+                show_snack_bar("请先选择或输入有效的音乐文件路径")
+
+         # 定义所有控件
+        name_field = ft.TextField(label="姓名", value=selected_event.name if selected_event else "", expand=True)
         
         year_field = ft.TextField(
             label="年", 
             value=selected_event.birth_date.split("-")[0] if selected_event else "1990", 
-            width=60,
+            expand=True,
             text_align=ft.TextAlign.CENTER,
         )
         month_field = ft.TextField(
             label="月", 
             value=selected_event.birth_date.split("-")[1] if selected_event else "01", 
-            width=40,
+            expand=True,
             text_align=ft.TextAlign.CENTER,
         )
         day_field = ft.TextField(
             label="日", 
             value=selected_event.birth_date.split("-")[2] if selected_event else "01", 
-            width=40,
+            expand=True,
             text_align=ft.TextAlign.CENTER,
         )
         
@@ -920,38 +964,46 @@ def main(page: ft.Page):
             label="历法",
             options=[ft.dropdown.Option("solar", "阳历"), ft.dropdown.Option("lunar", "农历")],
             value=selected_event.calendar_type if selected_event else "solar",
-            width=250,
+            expand=True,
         )
         
         music_field = ft.TextField(
             label="音乐文件路径", 
             value=selected_event.sound_file if selected_event else "", 
-            hint_text="/storage/emulated/0/Music/xxx.mp3",
-            width=250,
+            hint_text="可直接输入路径，或点击按钮选择",
+            expand=True,
         )
         
-        # ========== 音乐搜索相关控件 ==========
+        # 按钮行 - 换行显示（使用 Column 或 Wrap）
+        music_buttons = ft.Row(
+            controls=[
+                ft.Button("📁 选择", on_click=pick_music_file, expand=True),
+                ft.Button("🗑️ 清除", on_click=clear_music, expand=True),
+                ft.Button("▶️ 试听", on_click=test_play, expand=True),
+            ],
+            spacing=10,
+        )
+        
         # ========== 音乐搜索相关控件 ==========
         search_keyword_field = ft.TextField(
             label="搜索歌曲", 
             hint_text="输入歌曲名或歌手名",
-            width=140,
+            expand=True,
         )
-        #search_btn = ft.Button("🔍搜索", width=90)
         search_btn = ft.Button(
             "🔍 搜索", 
-            width=90,
+            expand=True,
             style=ft.ButtonStyle(
-                text_style=ft.TextStyle(size=11.5),  # 设置字体大小
+                text_style=ft.TextStyle(size=11.5),
             )
         )
         search_results_dropdown = ft.Dropdown(
             label="搜索结果",
             hint_text="点击搜索后选择歌曲",
-            width=250,
+            expand=True,
             options=[],
         )
-        download_btn = ft.Button("📥 下载并应用", width=160) # , disabled=True
+        download_btn = ft.Button("📥 下载并应用", expand=True)
         search_status = ft.Text("", size=11, color=ft.Colors.GREY_500)
         
         search_results = []
@@ -959,14 +1011,12 @@ def main(page: ft.Page):
         # 定义搜索函数
         def do_search(e):
             keyword = search_keyword_field.value.strip()
-            print(f"[搜索] 按钮被点击！关键词: '{keyword}'")  # 关键日志
+            print(f"[搜索] 按钮被点击！关键词: '{keyword}'")
             
             if not keyword:
-                print("[搜索] 关键词为空，显示提示")
                 show_snack_bar("请输入歌曲名称")
                 return
             
-            print("[搜索] 开始搜索...")
             search_btn.disabled = True
             search_btn.text = "搜索中..."
             search_status.value = "正在搜索..."
@@ -975,23 +1025,18 @@ def main(page: ft.Page):
             
             def search_thread():
                 nonlocal search_results
-                print(f"[搜索线程] 开始执行，关键词: {keyword}")
                 try:
                     downloader = LyricsDownloader()
                     search_url = f"https://www.gequbao.com/s/{keyword}"
-                    print(f"[搜索线程] 请求URL: {search_url}")
-                    
                     headers = {'User-Agent': downloader.get_random_ua()}
                     response = downloader.session.get(search_url, headers=headers, timeout=15)
                     response.encoding = 'utf-8'
-                    print(f"[搜索线程] 响应状态码: {response.status_code}")
                     
                     if response.status_code == 200:
                         pattern = r'<a href="/music/(\d+)"[^>]*>.*?<span class="text-primary[^"]*"[^>]*>(.*?)</span>.*?<small class="text-jade[^"]*"[^>]*>(.*?)</small>'
                         matches = re.findall(pattern, response.text, re.DOTALL)
-                        print(f"[搜索线程] 找到 {len(matches)} 个匹配项")
                         
-                        search_results.clear()
+                        search_results = []
                         options = []
                         for music_id, song_name, artist in matches[:10]:
                             song_name = re.sub(r'<[^>]+>', '', song_name).strip()
@@ -1005,20 +1050,17 @@ def main(page: ft.Page):
                                 })
                                 display_text = f"{song_name} - {artist}" if artist else song_name
                                 options.append(ft.dropdown.Option(music_id, display_text))
-                                print(f"[搜索线程] 歌曲: {display_text}")
                         
-                        # 调用异步函数
-                        page.run_task(update_search_results, options)
+                        page.run_task(lambda: update_search_results(options))
                     else:
-                        page.run_task(show_snack_bar, "搜索失败，请重试")
+                        page.run_task(lambda: show_snack_bar("搜索失败，请重试"))
                 except Exception as e:
                     print(f"搜索出错: {e}")
-                    page.run_task(show_snack_bar, f"搜索出错: {str(e)}")
+                    page.run_task(lambda: show_snack_bar(f"搜索出错: {str(e)}"))
                 finally:
-                    page.run_task(reset_search_btn)
+                    page.run_task(lambda: reset_search_btn())
             
-            async def update_search_results(options):
-                print(f"[UI更新] 更新搜索结果，共 {len(options)} 条")
+            def update_search_results(options):
                 search_results_dropdown.options = options
                 if options:
                     search_results_dropdown.disabled = False
@@ -1029,41 +1071,34 @@ def main(page: ft.Page):
                     download_btn.disabled = True
                     search_status.value = "未找到相关歌曲"
                     search_status.color = ft.Colors.RED_700
-                # 使用同步 update 方法
                 search_results_dropdown.update()
                 search_status.update()
                 download_btn.update()
+                page.update()
             
-            async def reset_search_btn():
-                print("[UI更新] 重置搜索按钮")
+            def reset_search_btn():
                 search_btn.disabled = False
                 search_btn.text = "🔍 搜索"
                 search_btn.update()
+                page.update()
             
-            # 启动搜索线程
             threading.Thread(target=search_thread, daemon=True).start()
         
         def on_result_select(e):
-            print(f"[选择] 选中歌曲ID: {search_results_dropdown.value}")
-            print(f"[选择] search_results 内容: {search_results}")
-            
             if search_results_dropdown.value:
                 for song in search_results:
-                    print(f"[选择] 比较: song['id']={song['id']} ({type(song['id'])}), 选中值={search_results_dropdown.value} ({type(search_results_dropdown.value)})")
-                    if str(song['id']) == str(search_results_dropdown.value):  # 确保类型一致
+                    if str(song['id']) == str(search_results_dropdown.value):
                         download_btn.disabled = False
                         search_status.value = f"已选择: {song['name']} - {song['artist']}"
                         search_status.color = ft.Colors.BLUE_700
-                        print(f"[选择] 找到匹配: {song['name']}")
                         break
                 else:
                     download_btn.disabled = True
                     search_status.value = "请重新搜索选择"
                     search_status.color = ft.Colors.RED_700
-                    print(f"[选择] 未找到匹配的歌曲")
             else:
                 download_btn.disabled = True
-                print(f"[选择] 未选择歌曲")
+                search_status.value = ""
             
             download_btn.update()
             search_status.update()
@@ -1324,7 +1359,10 @@ def main(page: ft.Page):
                 ft.Text("日", size=14),
             ], alignment=ft.MainAxisAlignment.CENTER),
             calendar_type,
-            music_field,
+            # 音乐文件区域
+            music_field,  # 文本框在上
+            music_buttons,  # 按钮在下，换行显示
+            selected_file_display,  # 显示选中的文件名
             ft.Divider(height=5),
             ft.Text("🎵 在线搜索音乐", size=14, weight=ft.FontWeight.BOLD),
             ft.Row([search_keyword_field, search_btn], spacing=8),
@@ -1333,7 +1371,7 @@ def main(page: ft.Page):
             ft.Divider(height=5),
             ft.Text("💡 提示: 农历生日会自动计算每年对应的阳历日期", size=11, color=ft.Colors.GREY_500),
             ft.Row([ft.TextButton("取消", on_click=cancel_click), ft.TextButton("保存", on_click=save_click)], alignment=ft.MainAxisAlignment.END),
-        ], spacing=15, scroll=ft.ScrollMode.AUTO, height=500)  # 添加 scroll 和固定高度
+        ], spacing=15, scroll=ft.ScrollMode.AUTO, height=500)
 
         dialog_container = ft.Container(
             content=ft.Container(
@@ -1341,11 +1379,11 @@ def main(page: ft.Page):
                 bgcolor=ft.Colors.WHITE,
                 padding=20,
                 border_radius=10,
-                width=450,  # 设置固定宽度
+                expand=True,  # 添加事件界面自动填满可用空间
             ),
-            left=50,
+            left=20,
             top=50,
-            right=50,
+            right=20,
             bottom=50,
         )
         
