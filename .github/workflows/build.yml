@@ -33,7 +33,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet flet-audio lunardate requests mutagen
+          pip install flet flet-audio lunardate requests mutagen pyncm
 
       - name: Create pyproject.toml
         run: |
@@ -49,6 +49,7 @@ jobs:
               "lunardate",
               "requests",
               "mutagen",
+              "pyncm",
           ]
 
           [tool.flet]

@@ -898,19 +898,19 @@ def main(page: ft.Page):
         name_field = ft.TextField(label="姓名", value=selected_event.name if selected_event else "", width=250)
         
         year_field = ft.TextField(
-            label="年份", 
+            label="年", 
             value=selected_event.birth_date.split("-")[0] if selected_event else "1990", 
-            width=80,
+            width=60,
             text_align=ft.TextAlign.CENTER,
         )
         month_field = ft.TextField(
-            label="月份", 
+            label="月", 
             value=selected_event.birth_date.split("-")[1] if selected_event else "01", 
             width=40,
             text_align=ft.TextAlign.CENTER,
         )
         day_field = ft.TextField(
-            label="日期", 
+            label="日", 
             value=selected_event.birth_date.split("-")[2] if selected_event else "01", 
             width=40,
             text_align=ft.TextAlign.CENTER,
@@ -935,7 +935,7 @@ def main(page: ft.Page):
         search_keyword_field = ft.TextField(
             label="搜索歌曲", 
             hint_text="输入歌曲名或歌手名",
-            width=150,
+            width=140,
         )
         #search_btn = ft.Button("🔍搜索", width=90)
         search_btn = ft.Button(
@@ -1327,13 +1327,13 @@ def main(page: ft.Page):
             music_field,
             ft.Divider(height=5),
             ft.Text("🎵 在线搜索音乐", size=14, weight=ft.FontWeight.BOLD),
-            ft.Row([search_keyword_field, search_btn], spacing=10),
+            ft.Row([search_keyword_field, search_btn], spacing=8),
             search_results_dropdown,
-            ft.Row([download_btn, search_status], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row([download_btn, search_status], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
             ft.Divider(height=5),
             ft.Text("💡 提示: 农历生日会自动计算每年对应的阳历日期", size=11, color=ft.Colors.GREY_500),
             ft.Row([ft.TextButton("取消", on_click=cancel_click), ft.TextButton("保存", on_click=save_click)], alignment=ft.MainAxisAlignment.END),
-        ], spacing=15, scroll=ft.ScrollMode.AUTO, height=450)  # 添加 scroll 和固定高度
+        ], spacing=15, scroll=ft.ScrollMode.AUTO, height=500)  # 添加 scroll 和固定高度
 
         dialog_container = ft.Container(
             content=ft.Container(
@@ -1472,8 +1472,8 @@ def main(page: ft.Page):
         page.overlay.append(combined_container)
         page.update()
         
-        # 30秒后自动关闭
-        threading.Timer(30.0, close_combined_reminder).start()
+        # 10秒后自动关闭
+        threading.Timer(10.0, close_combined_reminder).start()
         
         # 自动播放音乐（仅生日当天）
         if is_today and music_file:
