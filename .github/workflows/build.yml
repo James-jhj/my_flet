@@ -1,0 +1,78 @@
+name: Build Flet Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flet flet-audio lunardate requests mutagen
+
+      - name: Create pyproject.toml
+        run: |
+          cat > pyproject.toml << 'EOF'
+          [project]
+          name = "birthday_reminder"
+          version = "1.0.1"
+          description = "生日提醒助手"
+          requires-python = ">=3.9"
+          dependencies = [
+              "flet",
+              "flet-audio",
+              "lunardate",
+              "requests",
+              "mutagen",
+          ]
+
+          [tool.flet]
+          org = "com.jianghuajie"
+          app_name = "生日提醒助手"
+          product = "birthday_reminder"
+
+          [tool.flet.flutter]
+          dependencies = ["flet_audio"]
+
+          [tool.flet.android.permission]
+          "android.permission.READ_MEDIA_AUDIO" = true
+          "android.permission.READ_EXTERNAL_STORAGE" = true
+          "android.permission.INTERNET" = true
+          "android.permission.WAKE_LOCK" = true
+          "android.permission.FOREGROUND_SERVICE" = true
+          EOF
+
+      - name: Build APK
+        run: |
+          flet build apk --yes
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: birthday-reminder-apk
+          path: build/apk/*.apk

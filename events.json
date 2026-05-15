@@ -1,0 +1,38 @@
+[
+  {
+    "id": "1778547876",
+    "name": "蒋华杰+0",
+    "birth_date": "1983-05-19",
+    "calendar_type": "solar",
+    "sound_file": "E:\\Music\\此生不换-青鸟飞鱼.mp3",
+    "reminded_this_year": true,
+    "last_remind_year": 2026
+  },
+  {
+    "id": "1778757221",
+    "name": "测试20",
+    "birth_date": "1990-05-25",
+    "calendar_type": "solar",
+    "sound_file": "C:\\Users\\Lenovo\\Music\\BirthdayReminder\\中国人-刘德华.mp3",
+    "reminded_this_year": false,
+    "last_remind_year": 0
+  },
+  {
+    "id": "1778761820",
+    "name": "测试",
+    "birth_date": "1990-05-16",
+    "calendar_type": "solar",
+    "sound_file": "C:\\Users\\Lenovo\\Music\\BirthdayReminder\\悬溺-葛东琪.mp3",
+    "reminded_this_year": false,
+    "last_remind_year": 0
+  },
+  {
+    "id": "1778763963",
+    "name": "测试下载歌词-偏爱",
+    "birth_date": "1990-05-20",
+    "calendar_type": "solar",
+    "sound_file": "E:\\Music\\偏爱 - 张芸京.mp3",
+    "reminded_this_year": false,
+    "last_remind_year": 0
+  }
+]
