@@ -33,7 +33,9 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet flet-audio lunardate requests mutagen pyncm
+          pip install flet flet-audio lunardate requests mutagen
+          # pyncm 可选安装，如果失败不影响主流程
+          pip install git+https://github.com/mos9527/pyncm.git || echo "pyncm安装跳过"
 
       - name: Create pyproject.toml
         run: |
