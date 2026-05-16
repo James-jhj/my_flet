@@ -35,12 +35,19 @@ jobs:
           pip install --upgrade pip
           pip install flet flet-audio lunardate requests mutagen
 
+      - name: 读取版本号
+        id: version
+        run: |
+          VERSION=$(grep -oP 'APP_VERSION = "\K[^"]+' main.py)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "从 main.py 读取到版本: $VERSION"
+
       - name: Create pyproject.toml
         run: |
           cat > pyproject.toml << 'EOF'
           [project]
           name = "birthday_reminder"
-          version = "1.0.1"
+          version = "${{ steps.version.outputs.version }}"
           description = "生日提醒助手"
           requires-python = ">=3.9"
           dependencies = [
@@ -74,5 +81,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: birthday-reminder-apk
+          name: birthday-reminder-v${{ steps.version.outputs.version }}
           path: build/apk/*.apk
