@@ -3,3 +3,4 @@ flet-audio
 lunardate
 requests
 mutagen
+playwright
