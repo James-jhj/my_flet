@@ -14,7 +14,14 @@ import html
 from pathlib import Path
 from datetime import datetime, timedelta
 from lunardate import LunarDate
-from playwright.sync_api import sync_playwright
+
+# 尝试导入 playwright，失败时设置标志
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    print("警告: playwright 模块不可用，音乐下载功能将使用降级方案")
 
 # ========== 版本信息 ==========
 APP_VERSION = "1.0.2"
@@ -296,6 +303,10 @@ class LyricsDownloader:
 
     def get_mp3_url_playwright(self, song_url):
         """Windows/Mac平台：使用playwright获取MP3链接"""
+        if not PLAYWRIGHT_AVAILABLE:
+            print("playwright 模块不可用，跳过")
+            return None
+    
         mp3_url = None
         try:
             from playwright.sync_api import sync_playwright
