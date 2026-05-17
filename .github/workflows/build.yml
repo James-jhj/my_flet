@@ -48,7 +48,7 @@ jobs:
           [project]
           name = "birthday_reminder"
           version = "${{ steps.version.outputs.version }}"
-          description = "生日提醒助手"
+          description = "事件提醒助手"
           requires-python = ">=3.9"
           dependencies = [
               "flet",
@@ -60,7 +60,7 @@ jobs:
 
           [tool.flet]
           org = "com.jianghuajie"
-          app_name = "生日提醒助手"
+          app_name = "事件提醒助手"
           product = "birthday_reminder"
 
           [tool.flet.flutter]

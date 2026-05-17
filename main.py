@@ -24,8 +24,8 @@ except ImportError:
     print("警告: playwright 模块不可用，音乐下载功能将使用降级方案")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.2"
-APP_VERSION_CODE = 2
+APP_VERSION = "1.0.3"
+APP_VERSION_CODE = 3
 # =============================
 
 class Event:
@@ -289,7 +289,7 @@ class LyricsDownloader:
                 
             except ImportError:
                 print("[网易云兜底] pyncm 未安装")
-                self._safe_show_message("❌ 网易云模块未安装")
+                # self._safe_show_message("❌ 网易云模块未安装")
                 return None
             except Exception as e:
                 print(f"[网易云兜底] 出错: {e}")
@@ -627,18 +627,64 @@ def main(page: ft.Page):
                     pass
 
     def delete_event(event_id):
-        if event_id in events:
-            name = events[event_id].name
+        """删除事件（带确认对话框 - 修复版）"""
+        if event_id not in events:
+            show_snack_bar("? 未找到该事件")
+            return
+        
+        event = events[event_id]
+        name = event.name
+        
+        # 保存对话框引用
+        delete_sheet = None
+        
+        def close_dialog():
+            if delete_sheet in page.overlay:
+                page.overlay.remove(delete_sheet)
+                page.update()
+        
+        def confirm_delete(e):
             try:
                 del events[event_id]
                 save_events()
                 refresh_events_list()
-                show_snack_bar(f"✅ 已删除「{name}」")
+                show_snack_bar(f"? 已删除「{name}」")
+                close_dialog()
             except Exception as e:
                 print(f"删除失败: {e}")
-                show_snack_bar(f"❌ 删除失败: {str(e)}")
-        else:
-            show_snack_bar("❌ 未找到该事件")
+                show_snack_bar(f"? 删除失败: {str(e)}")
+        
+        def cancel_delete(e):
+            close_dialog()
+            show_snack_bar(f"已取消删除「{name}」")
+        
+        # 创建对话框内容
+        dialog_content = ft.Container(
+            content=ft.Column([
+                ft.Text("确认删除", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700),
+                ft.Text(f"确定要删除「{name}」吗？", size=16),
+                ft.Text("此操作不可撤销！", size=12, color=ft.Colors.RED_600),
+                ft.Divider(height=10),
+                ft.Row([
+                    ft.TextButton("否", on_click=cancel_delete, expand=True),
+                    ft.ElevatedButton("是", on_click=confirm_delete, expand=True, 
+                                    bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE),
+                ], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+            ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=20,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=10,
+        )
+        
+        # 使用 BottomSheet 方式显示
+        delete_sheet = ft.BottomSheet(
+            content=dialog_content,
+            open=True,
+            on_dismiss=lambda e: None,
+        )
+        
+        page.overlay.append(delete_sheet)
+        page.update()
 
     def format_time(seconds):
         """格式化时间显示 mm:ss"""
@@ -1988,10 +2034,11 @@ def main(page: ft.Page):
     count_text = ft.Text(value=f"📊 事件总数: {len(events)}", size=12, color=ft.Colors.BLUE_700)
     
     main_content = ft.Column([
-    ft.Container(content=ft.Column([
-        ft.Text("📅 事件提醒助手", size=28, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
-        ft.Text("支持农历/阳历生日，并可支持日常事件提醒", size=12, color=ft.Colors.GREY_600),
-    ]), padding=16),
+        ft.Container(height=10),  # 添加10像素的空白区域
+        ft.Container(content=ft.Column([
+            ft.Text("📅 事件提醒助手", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
+            ft.Text("支持农历/阳历生日，同时支持日常事件提醒", size=12, color=ft.Colors.GREY_600),
+        ]), padding=16),
     ft.Divider(),
     ft.Row([ft.TextButton("◀", on_click=lambda e: change_date(-1)), date_display, ft.TextButton("▶", on_click=lambda e: change_date(1))], alignment=ft.MainAxisAlignment.CENTER),
     ft.Divider(),
