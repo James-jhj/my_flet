@@ -90,4 +90,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: birthday-reminder-v${{ steps.version.outputs.version }}
-          path: dist/*.apk # flet pack 输出到 dist/
+          path: build/apk/*.apk  # 改成这个路径
