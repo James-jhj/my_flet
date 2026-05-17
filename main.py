@@ -1,4 +1,5 @@
 import flet as ft
+import flet.canvas as cv  # 添加这一行
 import flet_audio as ftaudio
 from flet_audio import AudioState
 import asyncio
@@ -11,22 +12,151 @@ import requests
 import re
 import mutagen
 import html
-from pathlib import Path
+import datetime
+import math
+import asyncio
+import datetime as dt  # 为 AnalogClock 添加别名
 from datetime import datetime, timedelta
+from pathlib import Path
 from lunardate import LunarDate
 
-# 尝试导入 playwright，失败时设置标志
-try:
-    from playwright.sync_api import sync_playwright
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
+# ========== 平台检测（放在这里） ==========
+IS_ANDROID = platform.system() == "Android"
+
+# 根据平台决定是否启用网易云模块
+if IS_ANDROID:
+    PYCNM_AVAILABLE = False
     PLAYWRIGHT_AVAILABLE = False
-    print("警告: playwright 模块不可用，音乐下载功能将使用降级方案")
+    print("Android平台，网易云音乐和Playwright模块已禁用")
+else:
+    # 尝试导入 playwright，失败时设置标志
+    try:
+        from playwright.sync_api import sync_playwright
+        PLAYWRIGHT_AVAILABLE = True
+    except ImportError:
+        PLAYWRIGHT_AVAILABLE = False
+        print("警告: playwright 模块不可用，音乐下载功能将使用降级方案")
+    
+    # 尝试导入 pyncm
+    try:
+        from pyncm import apis
+        from pyncm.apis.login import LoginViaAnonymousAccount
+        PYCNM_AVAILABLE = True
+        print("pyncm 模块可用")
+    except ImportError:
+        PYCNM_AVAILABLE = False
+        print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.3"
-APP_VERSION_CODE = 3
+APP_VERSION = "1.0.4"
+APP_VERSION_CODE = 4
 # =============================
+
+class AnalogClock(ft.Container):
+    def __init__(self, main_page, size=160):
+        super().__init__()
+        self.main_page = main_page
+        self.size = size
+        self.canvas = cv.Canvas(width=size, height=size)
+        self.content = self.canvas
+        self.width = size
+        self.height = size
+        self.bgcolor = ft.Colors.WHITE
+        self.border_radius = 10
+        
+    def update_clock(self):
+        import datetime as dt
+        now = dt.datetime.now()
+        print(f"时钟更新: {now.strftime('%H:%M:%S')}")  # 调试用
+        self.canvas.shapes.clear()
+        
+        radius = self.size // 2
+        cx = radius
+        cy = radius
+        
+        # 外圆
+        self.canvas.shapes.append(
+            cv.Circle(cx, cy, radius-2,
+                     paint=ft.Paint(style=ft.PaintingStyle.STROKE, stroke_width=2))
+        )
+        
+        # 12个数字标记
+        for hour_num in range(1, 13):
+            angle = math.radians(hour_num * 30 - 90)
+            num_radius = radius - 20
+            x = cx + num_radius * math.cos(angle)
+            y = cy + num_radius * math.sin(angle)
+            self.canvas.shapes.append(
+                cv.Circle(x, y, 3, paint=ft.Paint(color=ft.Colors.BLUE_800))
+            )
+        
+        # 60个刻度线
+        for i in range(60):
+            angle = math.radians(i * 6 - 90)
+            if i % 5 == 0:
+                start_x = cx + (radius-15) * math.cos(angle)
+                start_y = cy + (radius-15) * math.sin(angle)
+                end_x = cx + (radius-5) * math.cos(angle)
+                end_y = cy + (radius-5) * math.sin(angle)
+                self.canvas.shapes.append(
+                    cv.Line(start_x, start_y, end_x, end_y,
+                           paint=ft.Paint(stroke_width=2.5, color=ft.Colors.BLACK))
+                )
+            else:
+                start_x = cx + (radius-10) * math.cos(angle)
+                start_y = cy + (radius-10) * math.sin(angle)
+                end_x = cx + (radius-5) * math.cos(angle)
+                end_y = cy + (radius-5) * math.sin(angle)
+                self.canvas.shapes.append(
+                    cv.Line(start_x, start_y, end_x, end_y,
+                           paint=ft.Paint(stroke_width=1, color=ft.Colors.GREY_500))
+                )
+        
+        # 指针
+        hour = now.hour % 12
+        minute = now.minute
+        second = now.second
+        
+        hour_angle = math.radians((hour + minute/60) * 30 - 90)
+        minute_angle = math.radians(minute * 6 - 90)
+        second_angle = math.radians(second * 6 - 90)
+        
+        # 时针
+        hour_len = radius * 0.45
+        hour_end_x = cx + hour_len * math.cos(hour_angle)
+        hour_end_y = cy + hour_len * math.sin(hour_angle)
+        self.canvas.shapes.append(
+            cv.Line(cx, cy, hour_end_x, hour_end_y,
+                   paint=ft.Paint(stroke_width=3.5, color=ft.Colors.BLACK))
+        )
+        
+        # 分针
+        minute_len = radius * 0.65
+        minute_end_x = cx + minute_len * math.cos(minute_angle)
+        minute_end_y = cy + minute_len * math.sin(minute_angle)
+        self.canvas.shapes.append(
+            cv.Line(cx, cy, minute_end_x, minute_end_y,
+                   paint=ft.Paint(stroke_width=2.5, color=ft.Colors.BLUE_800))
+        )
+        
+        # 秒针
+        second_len = radius * 0.75
+        second_end_x = cx + second_len * math.cos(second_angle)
+        second_end_y = cy + second_len * math.sin(second_angle)
+        self.canvas.shapes.append(
+            cv.Line(cx, cy, second_end_x, second_end_y,
+                   paint=ft.Paint(stroke_width=1.5, color=ft.Colors.RED))
+        )
+        
+        # 中心点
+        self.canvas.shapes.append(
+            cv.Circle(cx, cy, 4, paint=ft.Paint(color=ft.Colors.RED_700))
+        )
+        
+        # 关键：强制刷新 canvas 和页面
+        self.canvas.update()
+        if self.main_page:
+            self.main_page.update()
 
 class Event:
     def __init__(self, id: str, name: str, birth_date: str, calendar_type: str, event_type: str = "birthday", sound_file: str = ""):
@@ -176,6 +306,11 @@ class LyricsDownloader:
             return None
 
     def get_mp3_url_simple(self, song_url):
+        """Windows/Mac平台：如果是Android系统直接跳过，无法下载！"""
+        if not PYCNM_AVAILABLE:
+            print("python 模块不可用，跳过")
+            return None
+        
         """Android平台：简单方法，直接从HTML中提取MP3链接，失败时使用网易云音乐兜底"""
         mp3_url = None
         
@@ -371,10 +506,9 @@ class LyricsDownloader:
         print(f"[get_mp3_url_auto] song_url: {song_url}")
         
         if platform.system() == "Android":
-            print("[下载] 安卓平台：使用简单 HTML 解析方法获取链接")
-            mp3_url = self.get_mp3_url_simple(song_url)  # 已经包含网易云兜底
-            print(f"[下载] 方法返回: {mp3_url}")
-            return mp3_url
+            print("[下载] 安卓平台：暂时不支持下载功能")
+            self._safe_show_message("📱 Android版本暂不支持下载音乐，请手动选择音乐文件")
+            return None
         else:
             print("[下载] 桌面平台：使用 Playwright 获取链接")
             mp3_url = self.get_mp3_url_playwright(song_url)
@@ -524,7 +658,6 @@ def main(page: ft.Page):
     page.theme = ft.Theme(system_overlay_style=my_overlay_style)
     page.dark_theme = ft.Theme(system_overlay_style=my_overlay_style)
     
-    
     # 请求 Android 存储权限
     def request_permissions():
         if hasattr(page, 'request_permission'):
@@ -629,7 +762,7 @@ def main(page: ft.Page):
     def delete_event(event_id):
         """删除事件（带确认对话框 - 修复版）"""
         if event_id not in events:
-            show_snack_bar("? 未找到该事件")
+            show_snack_bar("未找到该事件")
             return
         
         event = events[event_id]
@@ -648,11 +781,11 @@ def main(page: ft.Page):
                 del events[event_id]
                 save_events()
                 refresh_events_list()
-                show_snack_bar(f"? 已删除「{name}」")
+                show_snack_bar(f"已删除「{name}」")
                 close_dialog()
             except Exception as e:
                 print(f"删除失败: {e}")
-                show_snack_bar(f"? 删除失败: {str(e)}")
+                show_snack_bar(f"删除失败: {str(e)}")
         
         def cancel_delete(e):
             close_dialog()
@@ -2001,7 +2134,8 @@ def main(page: ft.Page):
                 weekday_str = weekdays[now.weekday()]
                 
                 # 格式化：05月16日 星期六 农历三月三十 23:30:35
-                current_datetime_text.value = f"📅 当前时间: {now.month:02d}月{now.day:02d}日 {weekday_str} {lunar_str} {now.strftime('%H:%M:%S')}"
+                current_datetime_text.value = f"📅 当前时间: {now.strftime('%H:%M:%S')}"
+                date_text.value = f"{now.year}年{now.month:02d}月{now.day:02d}日 {weekday_str} {lunar_str} {now.strftime('%H:%M:%S')}"
                 
                 # 更新运行时间
                 elapsed = datetime.now() - start_time
@@ -2033,15 +2167,34 @@ def main(page: ft.Page):
 
     count_text = ft.Text(value=f"📊 事件总数: {len(events)}", size=12, color=ft.Colors.BLUE_700)
     
+    # 创建时钟（传入 page 参数）
+    clock = AnalogClock(page, size=160)
+    page.update()  # 强制刷新页面
+    
+    # 创建日期显示
+    date_text = ft.Text(value="", size=14, color=ft.Colors.GREY_600)
+
+    # 修改 main_content 的顶部部分
     main_content = ft.Column([
-        ft.Container(height=10),  # 添加10像素的空白区域
-        ft.Container(content=ft.Column([
-            ft.Text("📅 事件提醒助手", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
-            ft.Text("支持农历/阳历生日，同时支持日常事件提醒", size=12, color=ft.Colors.GREY_600),
-        ]), padding=16),
-    ft.Divider(),
-    ft.Row([ft.TextButton("◀", on_click=lambda e: change_date(-1)), date_display, ft.TextButton("▶", on_click=lambda e: change_date(1))], alignment=ft.MainAxisAlignment.CENTER),
-    ft.Divider(),
+        ft.Container(height=10),  # 顶部留白
+        
+        # 标题
+        ft.Container(
+            content=ft.Column([
+                ft.Text("📅 事件提醒助手", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
+                ft.Text("支持农历/阳历生日及日常事件提醒", size=12, color=ft.Colors.GREY_600),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=10,
+        ),
+        
+        # 时钟和日期组合（居中显示）
+        ft.Column([
+            clock,
+            ft.Container(height=5),
+            date_text,
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        
+        ft.Divider(),
     # 音乐播放控制区域
     ft.Container(
     content=ft.Column([
@@ -2089,6 +2242,7 @@ def main(page: ft.Page):
     ]), padding=12),
 ], spacing=8, expand=True)
     
+    # ========== 设置底部按钮 ==========
     page.bottom_appbar = ft.BottomAppBar(
         content=ft.Row([
             ft.Container(expand=True),
@@ -2100,8 +2254,23 @@ def main(page: ft.Page):
         ]),
     )
     
+    # ========== 添加页面内容 ==========
     page.add(main_content)
 
+    # 启动时钟更新循环
+    async def update_clock_loop():
+        while True:
+            clock.update_clock()  # 更新时钟
+            now = dt.datetime.now()
+            #date_text.value = now.strftime("%Y年%m月%d日 %A")
+            # 使用同步 update 而不是 update_async
+            #date_text.update()
+            await asyncio.sleep(1)  # 每秒更新一次
+
+    # 确保在正确的时机启动
+    asyncio.create_task(update_clock_loop())
+
+    # ========== 启动其他功能 ==========
     # 在 page.add(main_content) 之后启动
     asyncio.create_task(update_datetime_loop())
 
