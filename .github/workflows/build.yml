@@ -90,9 +90,8 @@ jobs:
         run: |
           flet pack main.py \
             --name "事件提醒助手" \
-            --add-requirements requirements.txt \
             --build-version ${{ steps.version.outputs.version }} \
-            --build-number ${{ steps.version.outputs.version_code }} \
+            -r requirements.txt \
             --android-keystore android-key.jks \
             --android-keystore-password James8329@ \
             --android-key-alias event-key \
