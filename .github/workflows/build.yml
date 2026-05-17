@@ -39,8 +39,10 @@ jobs:
         id: version
         run: |
           VERSION=$(grep -oP 'APP_VERSION = "\K[^"]+' main.py)
+          VERSION_CODE=$(grep -oP 'APP_VERSION_CODE = \K\d+' main.py)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "从 main.py 读取到版本: $VERSION"
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "从 main.py 读取到版本: $VERSION, 版本号: $VERSION_CODE"
 
       - name: Create pyproject.toml
         run: |
@@ -74,11 +76,27 @@ jobs:
           "android.permission.FOREGROUND_SERVICE" = true
           EOF
 
-      - name: Build APK
+      - name: 创建签名密钥（首次需要）
         run: |
-          flet build apk --yes
+          if [ ! -f "android-key.jks" ]; then
+            keytool -genkey -v -keystore android-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias event-key -storepass 123456 -keypass 123456 -dname "CN=JiangHuajie, OU=Dev, O=JiangHuajie, L=City, S=State, C=CN"
+            echo "已生成新的签名密钥"
+          else
+            echo "签名密钥已存在"
+          fi
 
-      - name: Upload APK
+      - name: 执行 APK 构建（带签名）
+        run: |
+          flet build apk \
+            --yes \
+            --android-keystore android-key.jks \
+            --android-keystore-password James8329@ \
+            --android-key-alias event-key \
+            --android-key-password James8329@ \
+            --build-version ${{ steps.version.outputs.version }} \
+            --build-number ${{ steps.version.outputs.version_code }}
+
+      - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
           name: birthday-reminder-v${{ steps.version.outputs.version }}
