@@ -48,8 +48,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.4"
-APP_VERSION_CODE = 4
+APP_VERSION = "1.0.5"
+APP_VERSION_CODE = 5
 # =============================
 
 class AnalogClock(ft.Container):
@@ -67,7 +67,7 @@ class AnalogClock(ft.Container):
     def update_clock(self):
         import datetime as dt
         now = dt.datetime.now()
-        print(f"时钟更新: {now.strftime('%H:%M:%S')}")  # 调试用
+        #print(f"时钟更新: {now.strftime('%H:%M:%S')}")  # 调试用
         self.canvas.shapes.clear()
         
         radius = self.size // 2
@@ -1259,6 +1259,9 @@ def main(page: ft.Page):
     def open_add_dialog(is_edit=False):
         nonlocal dialog_container, selected_event
         close_dialog()
+
+        # 检测是否为 Android 平台
+        IS_ANDROID = platform.system() == "Android"
         
          # 创建 FilePicker 并添加到页面服务
         file_picker = ft.FilePicker()
@@ -1418,217 +1421,232 @@ def main(page: ft.Page):
         
         search_results = []
         
-        # 定义搜索函数
-        def do_search(e):
-            keyword = search_keyword_field.value.strip()
-            print(f"[搜索] 按钮被点击！关键词: '{keyword}'")
-            
-            if not keyword:
-                print("[搜索] 关键词为空，显示提示")
-                show_snack_bar("请输入歌曲名称")  # 直接调用，不在线程中
-                return
-            
-            search_btn.disabled = True
-            search_btn.text = "搜索中..."
-            search_status.value = "正在搜索..."
-            search_status.color = ft.Colors.BLUE_700
-            page.update()
-            
-            def search_thread():
-                nonlocal search_results
-                print(f"[搜索线程] 开始执行，关键词: {keyword}")
-                try:
-                    downloader = LyricsDownloader()
-                    search_url = f"https://www.gequbao.com/s/{keyword}"
-                    print(f"[搜索线程] 请求URL: {search_url}")
-                    
-                    headers = {'User-Agent': downloader.get_random_ua()}
-                    response = downloader.session.get(search_url, headers=headers, timeout=15)
-                    response.encoding = 'utf-8'
-                    print(f"[搜索线程] 响应状态码: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        pattern = r'<a href="/music/(\d+)"[^>]*>.*?<span class="text-primary[^"]*"[^>]*>(.*?)</span>.*?<small class="text-jade[^"]*"[^>]*>(.*?)</small>'
-                        matches = re.findall(pattern, response.text, re.DOTALL)
-                        print(f"[搜索线程] 找到 {len(matches)} 个匹配项")
+        # ========== 非 Android 平台才定义函数和绑定事件 ==========
+        if not IS_ANDROID:
+            # 定义搜索函数
+            def do_search(e):
+                keyword = search_keyword_field.value.strip()
+                print(f"[搜索] 按钮被点击！关键词: '{keyword}'")
+                
+                if not keyword:
+                    print("[搜索] 关键词为空，显示提示")
+                    show_snack_bar("请输入歌曲名称")  # 直接调用，不在线程中
+                    return
+                
+                search_btn.disabled = True
+                search_btn.text = "搜索中..."
+                search_status.value = "正在搜索..."
+                search_status.color = ft.Colors.BLUE_700
+                page.update()
+                
+                def search_thread():
+                    nonlocal search_results
+                    print(f"[搜索线程] 开始执行，关键词: {keyword}")
+                    try:
+                        downloader = LyricsDownloader()
+                        search_url = f"https://www.gequbao.com/s/{keyword}"
+                        print(f"[搜索线程] 请求URL: {search_url}")
                         
-                        search_results = []
-                        options = []
-                        for music_id, song_name, artist in matches[:10]:
-                            song_name = re.sub(r'<[^>]+>', '', song_name).strip()
-                            artist = re.sub(r'<[^>]+>', '', artist).strip()
-                            if song_name:
-                                search_results.append({
-                                    'id': music_id,
-                                    'name': song_name,
-                                    'artist': artist if artist else "未知歌手",
-                                    'url': f"https://www.gequbao.com/music/{music_id}"
-                                })
-                                display_text = f"{song_name} - {artist}" if artist else song_name
-                                options.append(ft.dropdown.Option(music_id, display_text))
-                                print(f"[搜索线程] 歌曲: {display_text}")
+                        headers = {'User-Agent': downloader.get_random_ua()}
+                        response = downloader.session.get(search_url, headers=headers, timeout=15)
+                        response.encoding = 'utf-8'
+                        print(f"[搜索线程] 响应状态码: {response.status_code}")
                         
-                        # 使用 threading.Timer 在主线程中更新UI
-                        threading.Timer(0.1, lambda: update_search_results(options)).start()
+                        if response.status_code == 200:
+                            pattern = r'<a href="/music/(\d+)"[^>]*>.*?<span class="text-primary[^"]*"[^>]*>(.*?)</span>.*?<small class="text-jade[^"]*"[^>]*>(.*?)</small>'
+                            matches = re.findall(pattern, response.text, re.DOTALL)
+                            print(f"[搜索线程] 找到 {len(matches)} 个匹配项")
+                            
+                            search_results = []
+                            options = []
+                            for music_id, song_name, artist in matches[:10]:
+                                song_name = re.sub(r'<[^>]+>', '', song_name).strip()
+                                artist = re.sub(r'<[^>]+>', '', artist).strip()
+                                if song_name:
+                                    search_results.append({
+                                        'id': music_id,
+                                        'name': song_name,
+                                        'artist': artist if artist else "未知歌手",
+                                        'url': f"https://www.gequbao.com/music/{music_id}"
+                                    })
+                                    display_text = f"{song_name} - {artist}" if artist else song_name
+                                    options.append(ft.dropdown.Option(music_id, display_text))
+                                    print(f"[搜索线程] 歌曲: {display_text}")
+                            
+                            # 使用 threading.Timer 在主线程中更新UI
+                            threading.Timer(0.1, lambda: update_search_results(options)).start()
+                        else:
+                            threading.Timer(0.1, lambda: show_snack_bar(f"搜索失败，状态码: {response.status_code}")).start()
+                    except requests.exceptions.ConnectionError as e:
+                        print(f"网络连接失败: {e}")
+                        threading.Timer(0.1, lambda: show_snack_bar("网络连接失败，请检查网络")).start()
+                    except requests.exceptions.Timeout as e:
+                        print(f"请求超时: {e}")
+                        threading.Timer(0.1, lambda: show_snack_bar("请求超时，请稍后重试")).start()
+                    except Exception as e:
+                        print(f"搜索出错: {e}")
+                        threading.Timer(0.1, lambda: show_snack_bar(f"搜索出错: {str(e)}")).start()
+                    finally:
+                        threading.Timer(0.1, reset_search_btn).start()
+                
+                def update_search_results(options):
+                    print(f"[UI更新] 更新搜索结果，共 {len(options)} 条")
+                    search_results_dropdown.options = options
+                    if options:
+                        search_results_dropdown.disabled = False
+                        search_status.value = f"找到 {len(options)} 首歌曲，请选择"
+                        search_status.color = ft.Colors.GREEN_700
                     else:
-                        threading.Timer(0.1, lambda: show_snack_bar(f"搜索失败，状态码: {response.status_code}")).start()
-                except requests.exceptions.ConnectionError as e:
-                    print(f"网络连接失败: {e}")
-                    threading.Timer(0.1, lambda: show_snack_bar("网络连接失败，请检查网络")).start()
-                except requests.exceptions.Timeout as e:
-                    print(f"请求超时: {e}")
-                    threading.Timer(0.1, lambda: show_snack_bar("请求超时，请稍后重试")).start()
-                except Exception as e:
-                    print(f"搜索出错: {e}")
-                    threading.Timer(0.1, lambda: show_snack_bar(f"搜索出错: {str(e)}")).start()
-                finally:
-                    threading.Timer(0.1, reset_search_btn).start()
+                        search_results_dropdown.disabled = True
+                        download_btn.disabled = True
+                        search_status.value = "未找到相关歌曲"
+                        search_status.color = ft.Colors.RED_700
+                    # 使用同步 update 方法
+                    search_results_dropdown.update()
+                    search_status.update()
+                    download_btn.update()
+                    page.update()
+                
+                def reset_search_btn():
+                    search_btn.disabled = False
+                    search_btn.text = "🔍 搜索"
+                    search_btn.update()
+                    page.update()
+                
+                threading.Thread(target=search_thread, daemon=True).start()
             
-            def update_search_results(options):
-                print(f"[UI更新] 更新搜索结果，共 {len(options)} 条")
-                search_results_dropdown.options = options
-                if options:
-                    search_results_dropdown.disabled = False
-                    search_status.value = f"找到 {len(options)} 首歌曲，请选择"
-                    search_status.color = ft.Colors.GREEN_700
+            def on_result_select(e):
+                print(f"[选择] 选中歌曲ID: {search_results_dropdown.value}")
+                print(f"[选择] search_results 内容: {search_results}")
+                
+                if search_results_dropdown.value:
+                    for song in search_results:
+                        print(f"[选择] 比较: song['id']={song['id']} ({type(song['id'])}), 选中值={search_results_dropdown.value} ({type(search_results_dropdown.value)})")
+                        if str(song['id']) == str(search_results_dropdown.value):  # 确保类型一致
+                            download_btn.disabled = False
+                            search_status.value = f"已选择: {song['name']} - {song['artist']}"
+                            search_status.color = ft.Colors.BLUE_700
+                            print(f"[选择] 找到匹配: {song['name']}")
+                            break
+                    else:
+                        download_btn.disabled = True
+                        search_status.value = "请重新搜索选择"
+                        search_status.color = ft.Colors.RED_700
+                        print(f"[选择] 未找到匹配的歌曲")
                 else:
-                    search_results_dropdown.disabled = True
                     download_btn.disabled = True
-                    search_status.value = "未找到相关歌曲"
-                    search_status.color = ft.Colors.RED_700
-                # 使用同步 update 方法
-                search_results_dropdown.update()
+                    search_status.value = ""
+                
+                download_btn.update()
                 search_status.update()
-                download_btn.update()
                 page.update()
             
-            def reset_search_btn():
-                search_btn.disabled = False
-                search_btn.text = "🔍 搜索"
-                search_btn.update()
-                page.update()
-            
-            threading.Thread(target=search_thread, daemon=True).start()
-        
-        def on_result_select(e):
-            print(f"[选择] 选中歌曲ID: {search_results_dropdown.value}")
-            print(f"[选择] search_results 内容: {search_results}")
-            
-            if search_results_dropdown.value:
+            def do_download(e):
+                selected_id = search_results_dropdown.value
+                print(f"[下载] 开始下载，选中ID: {selected_id}")
+                if not selected_id:
+                    return
+                
+                selected_song = None
                 for song in search_results:
-                    print(f"[选择] 比较: song['id']={song['id']} ({type(song['id'])}), 选中值={search_results_dropdown.value} ({type(search_results_dropdown.value)})")
-                    if str(song['id']) == str(search_results_dropdown.value):  # 确保类型一致
-                        download_btn.disabled = False
-                        search_status.value = f"已选择: {song['name']} - {song['artist']}"
-                        search_status.color = ft.Colors.BLUE_700
-                        print(f"[选择] 找到匹配: {song['name']}")
+                    if song['id'] == selected_id:
+                        selected_song = song
                         break
-                else:
-                    download_btn.disabled = True
-                    search_status.value = "请重新搜索选择"
-                    search_status.color = ft.Colors.RED_700
-                    print(f"[选择] 未找到匹配的歌曲")
-            else:
+                
+                if not selected_song:
+                    show_snack_bar("未找到选中的歌曲")
+                    return
+                
                 download_btn.disabled = True
-                search_status.value = ""
-            
-            download_btn.update()
-            search_status.update()
-            page.update()
-        
-        def do_download(e):
-            selected_id = search_results_dropdown.value
-            print(f"[下载] 开始下载，选中ID: {selected_id}")
-            if not selected_id:
-                return
-            
-            selected_song = None
-            for song in search_results:
-                if song['id'] == selected_id:
-                    selected_song = song
-                    break
-            
-            if not selected_song:
-                show_snack_bar("未找到选中的歌曲")
-                return
-            
-            download_btn.disabled = True
-            download_btn.text = "下载中..."
-            page.update()
-            
-            def download_thread():
-                try:
-                    print("[下载线程] 开始执行")
-                    downloader = LyricsDownloader(page=page, show_snack_bar=show_snack_bar)
-                    song_url = selected_song['url']
-                    print(f"[下载线程] 歌曲URL: {song_url}")
-                    #mp3_url = downloader.get_mp3_url_simple(song_url)
-                    # 测试下载歌曲宝的音乐
-                    mp3_url = downloader.get_mp3_url_auto(song_url)
-                    print(f"[下载线程] 获取到MP3链接: {mp3_url}")
-                    
-                    if not mp3_url:
-                        threading.Timer(0.1, lambda: show_snack_bar("❌ 未能获取到MP3链接")).start()
-                        threading.Timer(0.1, reset_download_button).start()
-                        return
-                    
-                    # ========== 根据平台选择保存路径 ==========
-                    if platform.system() == "Android":
-                        # 华为手机等Android设备 - 使用公共音乐目录
-                        # 获取外部存储路径（通常是 /storage/emulated/0）
-                        external_storage = os.environ.get("EXTERNAL_STORAGE", "/storage/emulated/0")
-                        download_dir = Path(external_storage) / "Music" / "BirthdayReminder"
-                        print(f"[下载线程] Android平台，保存到: {download_dir}")
-                    else:
-                        # Windows 电脑 - 使用用户音乐目录
-                        download_dir = Path.home() / "Music" / "BirthdayReminder"
-                        print(f"[下载线程] Windows平台，保存到: {download_dir}")
-                    
-                    # 创建目录
-                    download_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # 清理文件名中的非法字符
-                    filename = f"{selected_song['name']}-{selected_song['artist']}.mp3"
-                    filename = re.sub(r'[\\/*?:"<>|]', '', filename)
-                    filepath = download_dir / filename
-                    print(f"[下载线程] 保存路径: {filepath}")
-                    
-                    threading.Timer(0.1, lambda: show_snack_bar(f"正在下载: {selected_song['name']}...")).start()
-
-                    # 使用你提供的方法下载MP3文件
-                    success = download_mp3_file_with_headers(mp3_url, filepath, downloader)
-                    
-                    if success:
-                        # 更新音乐文件路径
-                        threading.Timer(0.1, lambda: setattr(music_field, 'value', str(filepath))).start()
-                        threading.Timer(0.1, lambda: setattr(selected_file_display, 'value', f"已选择: {filename}")).start()
-                        
-                        # 尝试下载歌词
-                        lyrics = downloader.search_and_get_lyrics(selected_song['name'], selected_song['artist'])
-                        if lyrics:
-                            lrc_path = filepath.with_suffix('.lrc')
-                            with open(lrc_path, 'w', encoding='utf-8') as f:
-                                f.write(lyrics)
-                            print(f"[下载] 歌词已保存: {lrc_path}")
-                        
-                        threading.Timer(0.1, lambda: show_snack_bar(f"下载完成: {filename}")).start()
-                    else:
-                        threading.Timer(0.1, lambda: show_snack_bar("下载失败")).start()
-                    
-                    threading.Timer(0.1, reset_download_button).start()
-                    
-                except Exception as e:
-                    print(f"下载出错: {e}")
-                    threading.Timer(0.1, lambda: show_snack_bar(f"下载失败: {str(e)}")).start()
-                    threading.Timer(0.1, reset_download_button).start()
-            
-            def reset_download_button():
-                download_btn.disabled = False
-                download_btn.text = "📥 下载并应用"
-                download_btn.update()
+                download_btn.text = "下载中..."
                 page.update()
-            
-            threading.Thread(target=download_thread, daemon=True).start()
+                
+                def download_thread():
+                    try:
+                        print("[下载线程] 开始执行")
+                        downloader = LyricsDownloader(page=page, show_snack_bar=show_snack_bar)
+                        song_url = selected_song['url']
+                        print(f"[下载线程] 歌曲URL: {song_url}")
+                        #mp3_url = downloader.get_mp3_url_simple(song_url)
+                        # 测试下载歌曲宝的音乐
+                        mp3_url = downloader.get_mp3_url_auto(song_url)
+                        print(f"[下载线程] 获取到MP3链接: {mp3_url}")
+                        
+                        if not mp3_url:
+                            threading.Timer(0.1, lambda: show_snack_bar("❌ 未能获取到MP3链接")).start()
+                            threading.Timer(0.1, reset_download_button).start()
+                            return
+                        
+                        # ========== 根据平台选择保存路径 ==========
+                        if platform.system() == "Android":
+                            # 华为手机等Android设备 - 使用公共音乐目录
+                            # 获取外部存储路径（通常是 /storage/emulated/0）
+                            external_storage = os.environ.get("EXTERNAL_STORAGE", "/storage/emulated/0")
+                            download_dir = Path(external_storage) / "Music" / "BirthdayReminder"
+                            print(f"[下载线程] Android平台，保存到: {download_dir}")
+                        else:
+                            # Windows 电脑 - 使用用户音乐目录
+                            download_dir = Path.home() / "Music" / "BirthdayReminder"
+                            print(f"[下载线程] Windows平台，保存到: {download_dir}")
+                        
+                        # 创建目录
+                        download_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # 清理文件名中的非法字符
+                        filename = f"{selected_song['name']}-{selected_song['artist']}.mp3"
+                        filename = re.sub(r'[\\/*?:"<>|]', '', filename)
+                        filepath = download_dir / filename
+                        print(f"[下载线程] 保存路径: {filepath}")
+                        
+                        threading.Timer(0.1, lambda: show_snack_bar(f"正在下载: {selected_song['name']}...")).start()
+
+                        # 使用你提供的方法下载MP3文件
+                        success = download_mp3_file_with_headers(mp3_url, filepath, downloader)
+                        
+                        if success:
+                            # 更新音乐文件路径
+                            threading.Timer(0.1, lambda: setattr(music_field, 'value', str(filepath))).start()
+                            threading.Timer(0.1, lambda: setattr(selected_file_display, 'value', f"已选择: {filename}")).start()
+                            
+                            # 尝试下载歌词
+                            lyrics = downloader.search_and_get_lyrics(selected_song['name'], selected_song['artist'])
+                            if lyrics:
+                                lrc_path = filepath.with_suffix('.lrc')
+                                with open(lrc_path, 'w', encoding='utf-8') as f:
+                                    f.write(lyrics)
+                                print(f"[下载] 歌词已保存: {lrc_path}")
+                            
+                            threading.Timer(0.1, lambda: show_snack_bar(f"下载完成: {filename}")).start()
+                        else:
+                            threading.Timer(0.1, lambda: show_snack_bar("下载失败")).start()
+                        
+                        threading.Timer(0.1, reset_download_button).start()
+                        
+                    except Exception as e:
+                        print(f"下载出错: {e}")
+                        threading.Timer(0.1, lambda: show_snack_bar(f"下载失败: {str(e)}")).start()
+                        threading.Timer(0.1, reset_download_button).start()
+                
+                def reset_download_button():
+                    download_btn.disabled = False
+                    download_btn.text = "📥 下载并应用"
+                    download_btn.update()
+                    page.update()
+                
+                threading.Thread(target=download_thread, daemon=True).start()
+
+            # 绑定事件
+            search_btn.on_click = do_search
+            search_results_dropdown.on_change = on_result_select
+            download_btn.on_click = do_download
+        else:
+            # Android 平台：禁用所有搜索相关控件
+            search_keyword_field.disabled = True
+            search_btn.disabled = True
+            search_results_dropdown.disabled = True
+            download_btn.disabled = True
+            search_status.value = "📱 Android版本暂不支持在线下载，请手动选择音乐文件"
+            search_status.color = ft.Colors.ORANGE_700
         
         def download_mp3_file_with_headers(mp3_url, filepath, downloader):
             """使用正确的请求头下载MP3文件"""
@@ -1692,12 +1710,6 @@ def main(page: ft.Page):
             except Exception as e:
                 print(f"[下载错误] {e}")
                 return False
-
-        # 绑定事件
-        search_btn.on_click = do_search
-        print("[对话框] 搜索按钮已绑定 do_search 函数")  # 日志
-        search_results_dropdown.on_change = on_result_select
-        download_btn.on_click = do_download
 
         # 定义取消函数（放在这里，在使用之前）
         def cancel_click(e):
