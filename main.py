@@ -48,8 +48,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.6"
-APP_VERSION_CODE = 6
+APP_VERSION = "1.0.7"
+APP_VERSION_CODE = 7
 # =============================
 
 class AnalogClock(ft.Container):
@@ -1806,7 +1806,17 @@ def main(page: ft.Page):
             ft.Text("🎵 在线搜索音乐", size=14, weight=ft.FontWeight.BOLD),
             ft.Row([search_keyword_field, search_btn], spacing=8),
             search_results_dropdown,
-            ft.Row([download_btn, search_status], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+            #ft.Row([download_btn, search_status], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+            # 下载按钮单独一行（使用 Row 居中）
+            ft.Row(
+                [download_btn],
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            # 提示信息单独一行（使用 Row 居中）
+            ft.Row(
+                [search_status],
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
             ft.Divider(height=5),
             hint_text,
             ft.Row([ft.TextButton("取消", on_click=cancel_click), ft.TextButton("保存", on_click=save_click)], 
