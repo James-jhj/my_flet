@@ -44,16 +44,6 @@ jobs:
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "从 main.py 读取到版本: $VERSION, 版本号: $VERSION_CODE"
       
-      - name: 创建 requirements.txt
-        run: |
-          cat > requirements.txt << 'EOF'
-          flet
-          flet-audio
-          requests
-          mutagen
-          lunardate
-          EOF
-      
       - name: Create pyproject.toml
         run: |
           cat > pyproject.toml << 'EOF'
@@ -84,18 +74,17 @@ jobs:
           "android.permission.INTERNET" = true
           "android.permission.WAKE_LOCK" = true
           "android.permission.FOREGROUND_SERVICE" = true
+          
+          [tool.flet.android.signing]
+          keystore = "android-key.jks"
+          keystore_password = "James8329@"
+          key_alias = "event-key"
+          key_password = "James8329@"
           EOF
 
-      - name: 执行 APK 构建（带签名）
+      - name: 执行 APK 构建
         run: |
-          flet pack main.py \
-            --name "事件提醒助手" \
-            --build-version ${{ steps.version.outputs.version }} \
-            -r requirements.txt \
-            --android-keystore android-key.jks \
-            --android-keystore-password James8329@ \
-            --android-key-alias event-key \
-            --android-key-password James8329@
+          flet build apk --yes
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4

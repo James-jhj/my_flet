@@ -29,9 +29,9 @@
     "android.permission.WAKE_LOCK" = true
     "android.permission.FOREGROUND_SERVICE" = true
 
-    [tool.flet.android]
-    signing_key_alias = "event-key"
-    signing_key_password = "James8329@"
-    signing_keystore_password = "James8329@"
-    signing_keystore = "android-key.jks"
+    [tool.flet.android.signing]
+		keystore = "android-key.jks"
+		keystore_password = "James8329@"
+		key_alias = "event-key"
+		key_password = "James8329@"
     EOF
