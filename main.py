@@ -21,10 +21,10 @@ from pathlib import Path
 from lunardate import LunarDate
 
 # ========== 平台检测（放在这里） ==========
-IS_ANDROID = platform.system() == "Android"
+IS_WINDOWS = platform.system() == "Windows"
 
 # 根据平台决定是否启用网易云模块
-if IS_ANDROID:
+if not IS_WINDOWS:
     PYCNM_AVAILABLE = False
     PLAYWRIGHT_AVAILABLE = False
     print("Android平台，网易云音乐和Playwright模块已禁用")
@@ -48,8 +48,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.5"
-APP_VERSION_CODE = 5
+APP_VERSION = "1.0.6"
+APP_VERSION_CODE = 6
 # =============================
 
 class AnalogClock(ft.Container):
@@ -505,7 +505,7 @@ class LyricsDownloader:
         print(f"[平台检测] 当前系统: {platform.system()}")
         print(f"[get_mp3_url_auto] song_url: {song_url}")
         
-        if platform.system() == "Android":
+        if platform.system() != "Windows":
             print("[下载] 安卓平台：暂时不支持下载功能")
             self._safe_show_message("📱 Android版本暂不支持下载音乐，请手动选择音乐文件")
             return None
@@ -1260,8 +1260,8 @@ def main(page: ft.Page):
         nonlocal dialog_container, selected_event
         close_dialog()
 
-        # 检测是否为 Android 平台
-        IS_ANDROID = platform.system() == "Android"
+        # 检测是否为 Windows 平台
+        #IS_WINDOWS = platform.system() == "Windows"
         
          # 创建 FilePicker 并添加到页面服务
         file_picker = ft.FilePicker()
@@ -1422,7 +1422,9 @@ def main(page: ft.Page):
         search_results = []
         
         # ========== 非 Android 平台才定义函数和绑定事件 ==========
-        if not IS_ANDROID:
+        print(f"测试打印平台： {platform.system()}")
+        print(f"测试打印平台： {IS_WINDOWS}")
+        if IS_WINDOWS:
             # 定义搜索函数
             def do_search(e):
                 keyword = search_keyword_field.value.strip()
