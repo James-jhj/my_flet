@@ -43,7 +43,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
           echo "从 main.py 读取到版本: $VERSION, 版本号: $VERSION_CODE"
-      
+
       - name: Create pyproject.toml
         run: |
           cat > pyproject.toml << 'EOF'
@@ -74,7 +74,7 @@ jobs:
           "android.permission.INTERNET" = true
           "android.permission.WAKE_LOCK" = true
           "android.permission.FOREGROUND_SERVICE" = true
-          
+
           [tool.flet.android.signing]
           keystore = "android-key.jks"
           keystore_password = "James8329@"
@@ -82,9 +82,15 @@ jobs:
           key_password = "James8329@"
           EOF
 
+      # ========== 新增：从 Secret 恢复签名密钥 ==========
+      - name: 恢复签名密钥
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-key.jks
+          echo "签名密钥已恢复"
+
       - name: 执行 APK 构建
         run: |
-          flet build apk --yes
+          flet build apk --yes --name "事件提醒助手"
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4

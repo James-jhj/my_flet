@@ -640,7 +640,7 @@ def get_data_file_path(filename):
 def main(page: ft.Page):
     # 在函数最开始声明所有需要使用的全局变量
     global current_audio, is_playing, current_music_file
-    page.title = "生日提醒助手"
+    page.title = "事件提醒助手"
     page.bgcolor = ft.Colors.WHITE
     page.window_width = 550
     page.window_height = 800
