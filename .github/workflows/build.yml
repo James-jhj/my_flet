@@ -62,8 +62,7 @@ jobs:
 
           [tool.flet]
           org = "com.jianghuajie"
-          app_name = "事件提醒助手"
-          product = "birthday_reminder"
+          product = "事件提醒助手"
 
           [tool.flet.flutter]
           dependencies = ["flet_audio"]
