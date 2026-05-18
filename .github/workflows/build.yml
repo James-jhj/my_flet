@@ -123,8 +123,8 @@ jobs:
             -sigalg SHA1withRSA \
             -digestalg SHA1 \
             -keystore android-key.jks \
-            -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
-            -keypass ${{ secrets.KEY_PASSWORD }} \
+            -storepass James8329@ \
+            -keypass James8329@ \
             "$APK_PATH" \
             event-key
           
