@@ -73,14 +73,6 @@ jobs:
           "android.permission.INTERNET" = true
           "android.permission.WAKE_LOCK" = true
           "android.permission.FOREGROUND_SERVICE" = true
-
-          [tool.flet.android]
-          # 降低最低支持版本以覆盖更多设备
-          min_sdk_version = 21
-          # 将目标SDK版本从36降到一个更稳定的版本，例如30或31，这对签名兼容性非常关键
-          target_sdk_version = 30
-          # 明确指定要构建的CPU架构，通常兼容性更好
-          abis = ["armeabi-v7a", "arm64-v8a"]
           EOF
 
       - name: 恢复签名密钥
