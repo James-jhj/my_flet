@@ -112,8 +112,8 @@ jobs:
           
           $APKSIGNER_PATH sign \
             --ks android-key.jks \
-            --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
-            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
+            --ks-pass pass:'James8329@' \
+            --key-pass pass:'James8329@' \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
