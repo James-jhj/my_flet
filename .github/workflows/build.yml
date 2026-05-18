@@ -90,7 +90,8 @@ jobs:
 
       - name: 执行 APK 构建
         run: |
-          flet build apk --yes --name "事件提醒助手"
+        	export FLET_APP_NAME="事件提醒助手"
+          flet build apk --yes
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
