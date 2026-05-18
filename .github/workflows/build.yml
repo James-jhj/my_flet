@@ -98,8 +98,8 @@ jobs:
           APK_PATH="./build/apk/birthday_reminder.apk"
           echo "Signing APK: $APK_PATH"
           
-          # 使用找到的完整路径
-          $APKSIGNER_PATH sign \
+          # 使用系统自带的 apksigner（通常已预装）
+          /usr/local/lib/android/sdk/build-tools/34.0.0/apksigner sign \
             --ks android-key.jks \
             --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
             --key-pass pass:${{ secrets.KEY_PASSWORD }} \
@@ -110,7 +110,7 @@ jobs:
           
           # 验证签名
           echo "Verifying APK signature:"
-          $APKSIGNER_PATH verify --verbose "$APK_PATH"
+          /usr/local/lib/android/sdk/build-tools/34.0.0/apksigner verify --verbose "$APK_PATH"
 
       # 继续您原有的上传或发布步骤
       - name: Upload APK Artifact
