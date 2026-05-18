@@ -79,27 +79,38 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-key.jks
           ls -la android-key.jks
-          # 验证 keystore 文件是否有效
           keytool -list -v -keystore android-key.jks -storepass ${{ secrets.KEYSTORE_PASSWORD }} | head -20
           echo "签名密钥已恢复"
 
+      # ========== 关键：先构建 APK ==========
+      - name: 执行 APK 构建
+        run: |
+          export FLET_APP_NAME="事件提醒助手"
+          flet build apk --yes
+
+      # ========== 然后设置签名工具 ==========
       - name: Set up Android SDK Build-Tools
         run: |
-          # 下载并解压
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
           unzip -q build-tools_r34-linux.zip
-          # 查找 apksigner 并保存路径
           APKSIGNER_PATH=$(find . -name "apksigner" -type f | head -1)
           echo "APKSIGNER_PATH=$APKSIGNER_PATH" >> $GITHUB_ENV
           echo "Found apksigner at: $APKSIGNER_PATH"
 
+      # ========== 最后签名 ==========
       - name: Sign APK with apksigner (V1+V2+V3)
         run: |
           APK_PATH="./build/apk/birthday_reminder.apk"
+          
+          # 检查 APK 是否存在
+          if [ ! -f "$APK_PATH" ]; then
+            echo "错误：APK 文件不存在 - $APK_PATH"
+            exit 1
+          fi
+          
           echo "Signing APK: $APK_PATH"
           
-          # 使用系统自带的 apksigner（通常已预装）
-          /usr/local/lib/android/sdk/build-tools/34.0.0/apksigner sign \
+          $APKSIGNER_PATH sign \
             --ks android-key.jks \
             --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
             --key-pass pass:${{ secrets.KEY_PASSWORD }} \
@@ -108,11 +119,9 @@ jobs:
             --v3-signing-enabled true \
             "$APK_PATH"
           
-          # 验证签名
           echo "Verifying APK signature:"
-          /usr/local/lib/android/sdk/build-tools/34.0.0/apksigner verify --verbose "$APK_PATH"
+          $APKSIGNER_PATH verify --verbose "$APK_PATH"
 
-      # 继续您原有的上传或发布步骤
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
