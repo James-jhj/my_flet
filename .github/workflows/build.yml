@@ -73,27 +73,98 @@ jobs:
           "android.permission.INTERNET" = true
           "android.permission.WAKE_LOCK" = true
           "android.permission.FOREGROUND_SERVICE" = true
-
-          [tool.flet.android.signing]
-          keystore = "android-key.jks"
-          keystore_password = "James8329@"
-          key_alias = "event-key"
-          key_password = "James8329@"
           EOF
 
-      # ========== 新增：从 Secret 恢复签名密钥 ==========
       - name: 恢复签名密钥
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-key.jks
+          ls -la android-key.jks
+          # 验证 keystore 文件是否有效
+          keytool -list -v -keystore android-key.jks -storepass ${{ secrets.KEYSTORE_PASSWORD }} | head -20
           echo "签名密钥已恢复"
 
       - name: 执行 APK 构建
         run: |
           export FLET_APP_NAME="事件提醒助手"
           flet build apk --yes
+          
+      # 调试：列出所有 APK 文件
+      - name: 查找 APK 文件
+        id: find_apk
+        run: |
+          echo "=== 查找所有 APK 文件 ==="
+          find . -name "*.apk" -type f
+          echo "=== build 目录结构 ==="
+          ls -la build/ || echo "build 目录不存在"
+          ls -la build/apk/ || echo "build/apk 目录不存在"
+          ls -la build/apk/android/ || echo "build/apk/android 目录不存在"
+          ls -la build/apk/android/app/build/outputs/apk/ 2>/dev/null || echo "未找到标准 Gradle 输出路径"
+          
+          # 找到第一个 APK 文件
+          APK_PATH=$(find . -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "错误：未找到任何 APK 文件！"
+            exit 1
+          fi
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "找到 APK: $APK_PATH"
+
+      - name: 手动签名 APK
+        if: steps.find_apk.outputs.apk_path != ''
+        run: |
+          APK_PATH="${{ steps.find_apk.outputs.apk_path }}"
+          echo "签名 APK: $APK_PATH"
+          
+          # 获取 APK 大小（签名前）
+          ls -lh "$APK_PATH"
+          
+          # 使用 jarsigner 签名
+          jarsigner -verbose \
+            -sigalg SHA1withRSA \
+            -digestalg SHA1 \
+            -keystore android-key.jks \
+            -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
+            -keypass ${{ secrets.KEY_PASSWORD }} \
+            "$APK_PATH" \
+            ${{ secrets.KEY_ALIAS }}
+          
+          # 验证签名是否成功
+          echo "=== 验证签名 ==="
+          jarsigner -verify -verbose "$APK_PATH"
+          if [ $? -ne 0 ]; then
+            echo "错误：签名验证失败！"
+            exit 1
+          fi
+          echo "✅ 签名完成"
+
+      - name: 最终验证签名详情
+        if: steps.find_apk.outputs.apk_path != ''
+        run: |
+          APK_PATH="${{ steps.find_apk.outputs.apk_path }}"
+          echo "最终验证 APK: $APK_PATH"
+          echo ""
+          echo "=== 签名证书 SHA256 指纹 ==="
+          keytool -printcert -jarfile "$APK_PATH" | grep -A 3 "SHA256"
+          echo ""
+          echo "=== APK 文件大小 ==="
+          ls -lh "$APK_PATH"
+          
+          # 保存签名指纹用于后续对比
+          SHA256_FINGERPRINT=$(keytool -printcert -jarfile "$APK_PATH" | grep -A 1 "SHA256:" | tail -1 | tr -d ' ')
+          echo "sha256_fingerprint=$SHA256_FINGERPRINT" >> $GITHUB_OUTPUT
+          echo "签名指纹: $SHA256_FINGERPRINT"
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: birthday-reminder-v${{ steps.version.outputs.version }}
-          path: build/apk/*.apk  # 改成这个路径
+          name: birthday-reminder-v${{ steps.version.outputs.version }}_code${{ steps.version.outputs.version_code }}
+          # 使用动态找到的 APK 路径
+          path: ${{ steps.find_apk.outputs.apk_path }}
+          
+      # 备用：如果上面的路径不对，也上传整个 build 目录
+      - name: 备用上传（整个 build 目录）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-build-directory
+          path: build/
