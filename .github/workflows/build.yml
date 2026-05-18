@@ -126,7 +126,7 @@ jobs:
             -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
             -keypass ${{ secrets.KEY_PASSWORD }} \
             "$APK_PATH" \
-            ${{ secrets.KEY_ALIAS }}
+            event-key
           
           # 验证签名是否成功
           echo "=== 验证签名 ==="
