@@ -73,6 +73,14 @@ jobs:
           "android.permission.INTERNET" = true
           "android.permission.WAKE_LOCK" = true
           "android.permission.FOREGROUND_SERVICE" = true
+
+          [tool.flet.android]
+          # 降低最低支持版本以覆盖更多设备
+          min_sdk_version = 21
+          # 将目标SDK版本从36降到一个更稳定的版本，例如30或31，这对签名兼容性非常关键
+          target_sdk_version = 30
+          # 明确指定要构建的CPU架构，通常兼容性更好
+          abis = ["armeabi-v7a", "arm64-v8a"]
           EOF
 
       - name: 恢复签名密钥
@@ -83,88 +91,42 @@ jobs:
           keytool -list -v -keystore android-key.jks -storepass ${{ secrets.KEYSTORE_PASSWORD }} | head -20
           echo "签名密钥已恢复"
 
+      # 新增一个步骤，用于设置 Android 签名环境
+      - name: Set up Android SDK Build-Tools
+        run: |
+          # 下载并解压最新版本的 build-tools
+          wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
+          unzip -q build-tools_r34-linux.zip -d $RUNNER_TEMP/build-tools
+          echo "$RUNNER_TEMP/build-tools/build-tools/34.0.0" >> $GITHUB_PATH
+
       - name: 执行 APK 构建
         run: |
           export FLET_APP_NAME="事件提醒助手"
           flet build apk --yes
           
-      # 调试：列出所有 APK 文件
-      - name: 查找 APK 文件
-        id: find_apk
+      # 替换您原有的所有签名步骤为下面这一个
+      - name: Sign APK with apksigner (V1+V2+V3)
         run: |
-          echo "=== 查找所有 APK 文件 ==="
-          find . -name "*.apk" -type f
-          echo "=== build 目录结构 ==="
-          ls -la build/ || echo "build 目录不存在"
-          ls -la build/apk/ || echo "build/apk 目录不存在"
-          ls -la build/apk/android/ || echo "build/apk/android 目录不存在"
-          ls -la build/apk/android/app/build/outputs/apk/ 2>/dev/null || echo "未找到标准 Gradle 输出路径"
-          
-          # 找到第一个 APK 文件
-          APK_PATH=$(find . -name "*.apk" -type f | head -1)
-          if [ -z "$APK_PATH" ]; then
-            echo "错误：未找到任何 APK 文件！"
-            exit 1
-          fi
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-          echo "找到 APK: $APK_PATH"
+          APK_PATH="./build/apk/birthday_reminder.apk"
+          echo "Signing APK: $APK_PATH"
 
-      - name: 手动签名 APK
-        if: steps.find_apk.outputs.apk_path != ''
-        run: |
-          APK_PATH="${{ steps.find_apk.outputs.apk_path }}"
-          echo "签名 APK: $APK_PATH"
-          
-          # 获取 APK 大小（签名前）
-          ls -lh "$APK_PATH"
-          
-          # 使用 jarsigner 签名
-          jarsigner -verbose \
-            -sigalg SHA1withRSA \
-            -digestalg SHA1 \
-            -keystore android-key.jks \
-            -storepass 'James8329@' \
-            -keypass 'James8329@' \
-            "$APK_PATH" \
-            event-key
-          
+          # 使用 apksigner 进行签名，强制启用 V1、V2、V3
+          apksigner sign \
+            --ks android-key.jks \
+            --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            "$APK_PATH"
+
           # 验证签名是否成功
-          echo "=== 验证签名 ==="
-          jarsigner -verify -verbose "$APK_PATH"
-          if [ $? -ne 0 ]; then
-            echo "错误：签名验证失败！"
-            exit 1
-          fi
-          echo "✅ 签名完成"
+          echo "Verifying APK signature:"
+          apksigner verify --verbose "$APK_PATH"
 
-      - name: 最终验证签名详情
-        if: steps.find_apk.outputs.apk_path != ''
-        run: |
-          APK_PATH="${{ steps.find_apk.outputs.apk_path }}"
-          echo "最终验证 APK: $APK_PATH"
-          echo ""
-          echo "=== 签名证书 SHA256 指纹 ==="
-          keytool -printcert -jarfile "$APK_PATH" | grep -A 3 "SHA256"
-          echo ""
-          echo "=== APK 文件大小 ==="
-          ls -lh "$APK_PATH"
-          
-          # 保存签名指纹用于后续对比
-          SHA256_FINGERPRINT=$(keytool -printcert -jarfile "$APK_PATH" | grep -A 1 "SHA256:" | tail -1 | tr -d ' ')
-          echo "sha256_fingerprint=$SHA256_FINGERPRINT" >> $GITHUB_OUTPUT
-          echo "签名指纹: $SHA256_FINGERPRINT"
-
-      - name: 上传 APK
+      # 继续您原有的上传或发布步骤
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: birthday-reminder-v${{ steps.version.outputs.version }}_code${{ steps.version.outputs.version_code }}
-          # 使用动态找到的 APK 路径
-          path: ${{ steps.find_apk.outputs.apk_path }}
-          
-      # 备用：如果上面的路径不对，也上传整个 build 目录
-      - name: 备用上传（整个 build 目录）
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-build-directory
-          path: build/
+          name: birthday-reminder-v${{ steps.version.outputs.version }}
+          path: ./build/apk/birthday_reminder.apk
