@@ -48,8 +48,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.8"
-APP_VERSION_CODE = 8
+APP_VERSION = "1.0.9"
+APP_VERSION_CODE = 9
 # =============================
 
 class AnalogClock(ft.Container):
@@ -2220,7 +2220,7 @@ def main(page: ft.Page):
         ], spacing=5),
         ft.Divider(height=5),
         ft.Text("💡 使用说明", size=14, weight=ft.FontWeight.BOLD),
-        ft.Text("• 点击「+」添加阳历或农历生日\n• 点击「切换视图」查看今日/所有事件\n• 点击「播放」播放音乐\n• 点击「停止音乐」停止播放\n• 生日当天自动弹框并播放音乐\n• 打开程序时自动检查今日生日", selectable=True),
+        ft.Text("• 点击「+」添加生日或事件信息\n• 点击「切换视图」查看今日/所有事件\n• 点击「播放」播放音乐\n• 点击「停止音乐」停止播放\n• 生日或事件当天自动弹框并播放音乐\n• 打开程序时自动检查今日生日或事件", selectable=True),
         ft.Row([ft.Text("🔔 提醒服务运行中", size=12, color=ft.Colors.GREEN_700), count_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         # 添加这一行显示版本号
         ft.Row([
