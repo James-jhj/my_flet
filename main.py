@@ -48,8 +48,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.7"
-APP_VERSION_CODE = 7
+APP_VERSION = "1.0.8"
+APP_VERSION_CODE = 8
 # =============================
 
 class AnalogClock(ft.Container):
@@ -157,6 +157,10 @@ class AnalogClock(ft.Container):
         self.canvas.update()
         if self.main_page:
             self.main_page.update()
+
+        # 强制刷新整个页面
+        if self.main_page:
+            self.main_page.update()  # 调用两次确保刷新
 
 class Event:
     def __init__(self, id: str, name: str, birth_date: str, calendar_type: str, event_type: str = "birthday", sound_file: str = ""):
@@ -695,7 +699,8 @@ def main(page: ft.Page):
     current_lyrics = []
 
     # 启动时间显示
-    start_time_text = ft.Text(value=f"🚀 启动时间: {start_time.strftime('%H:%M:%S')}", size=12, color=ft.Colors.GREY_600)
+    #start_time_text = ft.Text(value=f"🚀 启动时间: {start_time.strftime('%H:%M:%S')}", size=12, color=ft.Colors.GREY_600)
+    start_time_text = ft.Text(value=f"🚀 启动时间: {start_time.strftime('%Y年%m月%d日 %H:%M:%S')}", size=12, color=ft.Colors.GREY_600)
     run_time_text = ft.Text(value="⏱️ 运行时间: 00:00:00", size=12, color=ft.Colors.GREEN_600)  # 新增
     # 当前日期时间显示
     current_datetime_text = ft.Text(value="📅 当前时间：",size=12, color=ft.Colors.BLUE_700)
@@ -2110,10 +2115,10 @@ def main(page: ft.Page):
         def check_loop():
             while True:
                 try:
-                    # 每小时检查一次
+                    # 半小时检查一次
                     check_events()
-                    # 等待 1 小时（3600秒）
-                    time.sleep(3600)
+                    # 等待 1 小时（1800秒）
+                    time.sleep(1800)
                 except Exception as e:
                     print(f"定时检查出错: {e}")
                     time.sleep(60)  # 出错时等待1分钟后重试
@@ -2136,47 +2141,6 @@ def main(page: ft.Page):
                         '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
                         '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十']
         return chinese_days[day - 1] if 1 <= day <= 30 else str(day)
-
-    async def update_datetime_loop():
-        """异步更新时间显示循环"""
-        while True:
-            try:
-                now = datetime.now()
-                
-                # 获取农历日期
-                try:
-                    lunar = LunarDate.fromSolarDate(now.year, now.month, now.day)
-                    # 转换为中文显示
-                    lunar_month_str = number_to_chinese_month(lunar.month)
-                    lunar_day_str = number_to_chinese_day(lunar.day)
-                    lunar_str = f"农历{lunar_month_str}{lunar_day_str}"
-                except:
-                    lunar_str = "农历计算失败"
-                
-                # 获取星期几
-                weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
-                weekday_str = weekdays[now.weekday()]
-                
-                # 格式化：05月16日 星期六 农历三月三十 23:30:35
-                current_datetime_text.value = f"📅 当前时间: {now.strftime('%H:%M:%S')}"
-                date_text.value = f"{now.year}年{now.month:02d}月{now.day:02d}日 {weekday_str} {lunar_str} {now.strftime('%H:%M:%S')}"
-                
-                # 更新运行时间
-                elapsed = datetime.now() - start_time
-                total_seconds = int(elapsed.total_seconds())
-                hours = total_seconds // 3600
-                minutes = (total_seconds % 3600) // 60
-                seconds = total_seconds % 60
-                run_time_text.value = f"⏱️ 运行时间: {hours:02d}:{minutes:02d}:{seconds:02d}"
-
-                # 同时更新两个控件
-                current_datetime_text.update()
-                run_time_text.update()
-
-                await asyncio.sleep(1)
-            except Exception as e:
-                print(f"更新时间出错: {e}")
-                await asyncio.sleep(1)
 
     load_events()
     
@@ -2280,23 +2244,66 @@ def main(page: ft.Page):
     
     # ========== 添加页面内容 ==========
     page.add(main_content)
-
-    # 启动时钟更新循环
-    async def update_clock_loop():
+    
+    async def update_all():
         while True:
-            clock.update_clock()  # 更新时钟
-            now = dt.datetime.now()
-            #date_text.value = now.strftime("%Y年%m月%d日 %A")
-            # 使用同步 update 而不是 update_async
-            #date_text.update()
-            await asyncio.sleep(1)  # 每秒更新一次
+            try:
+                now = datetime.now()
 
-    # 确保在正确的时机启动
-    asyncio.create_task(update_clock_loop())
+                # 更新时钟
+                clock.update_clock()
+                
+                # 获取农历日期
+                try:
+                    lunar = LunarDate.fromSolarDate(now.year, now.month, now.day)
+                    # 转换为中文显示
+                    lunar_month_str = number_to_chinese_month(lunar.month)
+                    lunar_day_str = number_to_chinese_day(lunar.day)
+                    lunar_str = f"农历{lunar_month_str}{lunar_day_str}"
+                except:
+                    lunar_str = "农历计算失败"
+                
+                # 获取星期几
+                weekdays = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+                weekday_str = weekdays[now.weekday()]
+                
+                # 格式化：05月16日 星期六 农历三月三十 23:30:35
+                current_datetime_text.value = f"📅 当前时间: {now.strftime('%Y年%m月%d日 %H:%M:%S')}"
+                #date_text.value = f"{now.year}年{now.month:02d}月{now.day:02d}日 {weekday_str} {lunar_str} {now.strftime('%H:%M:%S')}"
+                
+                # 更新运行时间
+                elapsed = datetime.now() - start_time
+                total_seconds = int(elapsed.total_seconds())
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                seconds = total_seconds % 60
+                run_time_text.value = f"⏱️ 运行时间: {hours:02d}:{minutes:02d}:{seconds:02d}"
 
-    # ========== 启动其他功能 ==========
-    # 在 page.add(main_content) 之后启动
-    asyncio.create_task(update_datetime_loop())
+                # 更新日期文字
+                #date_text.value = now.strftime("%Y年%m月%d日 %H:%M:%S")
+                date_text.value = f"{now.year}年{now.month:02d}月{now.day:02d}日 {weekday_str} {lunar_str} {now.strftime('%H:%M:%S')}"
+                date_text.update()
+
+                # 同时更新两个控件
+                current_datetime_text.update()
+                run_time_text.update()
+
+                await asyncio.sleep(1)
+            except Exception as e:
+                print(f"更新时间出错: {e}")
+                await asyncio.sleep(1)
+
+    # 只启动一个循环
+    asyncio.create_task(update_all())
+
+    async def auto_refresh():
+        """每小时自动刷新事件列表"""
+        while True:
+            await asyncio.sleep(60)  # 每分钟刷新一次
+            refresh_events_list()
+            print(f"[自动刷新] 已刷新事件列表 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    asyncio.create_task(auto_refresh())
 
     refresh_events_list()
 
