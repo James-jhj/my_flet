@@ -83,26 +83,22 @@ jobs:
           keytool -list -v -keystore android-key.jks -storepass ${{ secrets.KEYSTORE_PASSWORD }} | head -20
           echo "签名密钥已恢复"
 
-      # 新增一个步骤，用于设置 Android 签名环境
       - name: Set up Android SDK Build-Tools
         run: |
           # 下载并解压最新版本的 build-tools
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
-          unzip -q build-tools_r34-linux.zip -d $RUNNER_TEMP/build-tools
-          echo "$RUNNER_TEMP/build-tools/build-tools/34.0.0" >> $GITHUB_PATH
+          unzip -q build-tools_r34-linux.zip -d $HOME/build-tools
+          # 添加到 PATH
+          echo "$HOME/build-tools/build-tools/34.0.0" >> $GITHUB_PATH
+          # 验证安装
+          ls -la $HOME/build-tools/build-tools/34.0.0/
 
-      - name: 执行 APK 构建
-        run: |
-          export FLET_APP_NAME="事件提醒助手"
-          flet build apk --yes
-          
-      # 替换您原有的所有签名步骤为下面这一个
       - name: Sign APK with apksigner (V1+V2+V3)
         run: |
           APK_PATH="./build/apk/birthday_reminder.apk"
           echo "Signing APK: $APK_PATH"
-
-          # 使用 apksigner 进行签名，强制启用 V1、V2、V3
+          
+          # 现在 apksigner 应该在 PATH 中
           apksigner sign \
             --ks android-key.jks \
             --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
@@ -111,8 +107,8 @@ jobs:
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             "$APK_PATH"
-
-          # 验证签名是否成功
+          
+          # 验证签名
           echo "Verifying APK signature:"
           apksigner verify --verbose "$APK_PATH"
 
