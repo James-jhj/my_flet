@@ -85,21 +85,21 @@ jobs:
 
       - name: Set up Android SDK Build-Tools
         run: |
-          # 下载并解压最新版本的 build-tools
+          # 下载并解压
           wget -q https://dl.google.com/android/repository/build-tools_r34-linux.zip
-          unzip -q build-tools_r34-linux.zip -d $HOME/build-tools
-          # 添加到 PATH
-          echo "$HOME/build-tools/build-tools/34.0.0" >> $GITHUB_PATH
-          # 验证安装
-          ls -la $HOME/build-tools/build-tools/34.0.0/
+          unzip -q build-tools_r34-linux.zip
+          # 查找 apksigner 并保存路径
+          APKSIGNER_PATH=$(find . -name "apksigner" -type f | head -1)
+          echo "APKSIGNER_PATH=$APKSIGNER_PATH" >> $GITHUB_ENV
+          echo "Found apksigner at: $APKSIGNER_PATH"
 
       - name: Sign APK with apksigner (V1+V2+V3)
         run: |
           APK_PATH="./build/apk/birthday_reminder.apk"
           echo "Signing APK: $APK_PATH"
           
-          # 现在 apksigner 应该在 PATH 中
-          apksigner sign \
+          # 使用找到的完整路径
+          $APKSIGNER_PATH sign \
             --ks android-key.jks \
             --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
             --key-pass pass:${{ secrets.KEY_PASSWORD }} \
@@ -110,7 +110,7 @@ jobs:
           
           # 验证签名
           echo "Verifying APK signature:"
-          apksigner verify --verbose "$APK_PATH"
+          $APKSIGNER_PATH verify --verbose "$APK_PATH"
 
       # 继续您原有的上传或发布步骤
       - name: Upload APK Artifact
