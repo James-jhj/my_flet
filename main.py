@@ -16,10 +16,6 @@ import datetime
 import math
 import asyncio
 import datetime as dt  # 为 AnalogClock 添加别名
-# 在文件顶部添加
-import notification_helper
-# 或者只导入你需要的函数
-#from notification_helper import send_event_notification
 from datetime import datetime, timedelta
 from pathlib import Path
 from lunardate import LunarDate
@@ -55,8 +51,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.12"
-APP_VERSION_CODE = 12
+APP_VERSION = "1.0.13"
+APP_VERSION_CODE = 13
 # =============================
 
 class AnalogClock(ft.Container):
@@ -658,41 +654,6 @@ def main(page: ft.Page):
     page.window_resizable = True
     page.scroll = ft.ScrollMode.AUTO
     page.theme_mode = ft.ThemeMode.LIGHT
-
-    # ========== 测试通知函数（放在这里） ==========
-    def test_notification(e):
-        """测试通知按钮"""
-        try:
-            from notification_helper import send_notification
-            send_notification("测试通知", "通知功能正常！")
-            show_snack_bar("✅ 测试通知已发送")
-        except Exception as err:
-            show_snack_bar(f"❌ 通知失败: {err}")
-    # ========== 测试通知函数结束 ==========
-
-
-    # ========== 请求通知权限 ==========
-    def request_notification_permission():
-        """请求通知权限（Android 13+）"""
-        if hasattr(page, 'request_permission'):
-            try:
-                page.request_permission("android.permission.POST_NOTIFICATIONS")
-                print("[权限] 已请求通知权限")
-            except Exception as e:
-                print(f"[权限] 请求通知权限失败: {e}")
-    
-    # 页面就绪后请求权限
-    page.on_ready = lambda _: request_notification_permission()
-    
-    # 初始化通知渠道（在后台线程执行，不阻塞UI）
-    def init_notify():
-        try:
-            from notification_helper import init_notification_channel
-            init_notification_channel()
-        except Exception as e:
-            print(f"[通知] 初始化失败: {e}")
-    
-    threading.Thread(target=init_notify, daemon=True).start()
 
     # 创建 geolocator 实例
     geolocator = Geolocator()
@@ -2195,18 +2156,6 @@ def main(page: ft.Page):
         if today_events:
             grouped = group_events_by_date(today_events)
             show_combined_reminder(grouped, is_today=True)
-
-            # ========== 发送锁屏通知（新增） ==========
-            from notification_helper import send_event_notification
-            
-            for event, _ in today_events:
-                if event.event_type == "birthday":
-                    month, day, year, birth_year, _ = event.get_next_date_info()
-                    age = today.year - birth_year
-                    send_event_notification(event.name, "birthday", age)
-                else:
-                    send_event_notification(event.name, "event")
-            # ========== 通知发送结束 ==========
         
         # 合并显示即将到来的生日
         if upcoming_events:
@@ -2264,18 +2213,6 @@ def main(page: ft.Page):
             if today_events:
                 grouped = group_events_by_date(today_events)
                 show_combined_reminder(grouped, is_today=True)
-
-                # ========== 发送锁屏通知（新增） ==========
-                from notification_helper import send_event_notification
-                
-                for event, _ in today_events:
-                    if event.event_type == "birthday":
-                        month, day, year, birth_year, _ = event.get_next_date_info()
-                        age = today.year - birth_year
-                        send_event_notification(event.name, "birthday", age)
-                    else:
-                        send_event_notification(event.name, "event")
-                # ========== 通知发送结束 ==========
 
                 # 更新提醒标记（只更新内存，不触发保存）
                 for event, _ in today_events:

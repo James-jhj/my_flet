@@ -33,7 +33,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet flet-audio flet_geolocator android-notify pyjnius lunardate requests mutagen
+          pip install flet flet-audio flet_geolocator lunardate requests mutagen
 
       - name: 读取版本号
         id: version
@@ -56,8 +56,6 @@ jobs:
               "flet",
               "flet-audio",
               "flet_geolocator",
-              "android-notify",
-              "pyjnius",
               "lunardate",
               "requests",
               "mutagen",
@@ -83,11 +81,6 @@ jobs:
           "android.permission.INTERNET" = true
           "android.permission.WAKE_LOCK" = true
           "android.permission.FOREGROUND_SERVICE" = true
-          
-          # 添加通知权限
-          "android.permission.POST_NOTIFICATIONS" = true
-          # 震动权限（可选，用于通知震动）
-          "android.permission.VIBRATE" = true
           EOF
 
       - name: 恢复签名密钥
