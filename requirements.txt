@@ -1,5 +1,6 @@
 flet
 flet-audio
+flet_geolocator
 lunardate
 requests
 mutagen

@@ -33,7 +33,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet flet-audio lunardate requests mutagen
+          pip install flet flet-audio flet_geolocator lunardate requests mutagen
 
       - name: 读取版本号
         id: version
@@ -55,6 +55,7 @@ jobs:
           dependencies = [
               "flet",
               "flet-audio",
+              "flet_geolocator",
               "lunardate",
               "requests",
               "mutagen",

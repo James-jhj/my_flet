@@ -50,8 +50,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.10"
-APP_VERSION_CODE = 10
+APP_VERSION = "1.0.11"
+APP_VERSION_CODE = 11
 # =============================
 
 class AnalogClock(ft.Container):
@@ -2330,7 +2330,7 @@ def main(page: ft.Page):
         ft.Row([ft.Text("🔔 提醒服务运行中", size=12, color=ft.Colors.GREEN_700), count_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         # 添加这一行显示版本号
         ft.Row([
-            ft.Text("", size=16),
+            #ft.Text("", size=16),
             ft.Text(f"📱 版本 {APP_VERSION}", size=10, color=ft.Colors.GREY_500),
         ], spacing=5),
     ]), padding=12),
