@@ -19,6 +19,8 @@ import datetime as dt  # 为 AnalogClock 添加别名
 from datetime import datetime, timedelta
 from pathlib import Path
 from lunardate import LunarDate
+from flet_geolocator import Geolocator, GeolocatorPermissionStatus, GeolocatorPositionAccuracy, GeolocatorConfiguration
+
 
 # ========== 平台检测（放在这里） ==========
 IS_WINDOWS = platform.system() == "Windows"
@@ -48,8 +50,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.9"
-APP_VERSION_CODE = 9
+APP_VERSION = "1.0.10"
+APP_VERSION_CODE = 10
 # =============================
 
 class AnalogClock(ft.Container):
@@ -652,6 +654,71 @@ def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.theme_mode = ft.ThemeMode.LIGHT
 
+    # 创建 geolocator 实例
+    geolocator = Geolocator()
+    
+    # 状态显示
+    status_text = ft.Text("状态: 初始化中...")
+    page.add(status_text)
+    
+    # 定义位置变化时的回调
+    def on_position_change(e):
+        if e.data:
+            status_text.value = f"✅ 前台服务运行中\n位置: {e.data.latitude}, {e.data.longitude}"
+            page.update()
+    
+    # 绑定事件
+    geolocator.on_position_change = on_position_change
+    
+    async def start_geolocator():
+        try:
+            # 1. 请求权限
+            status_text.value = "状态: 请求权限..."
+            page.update()
+            
+            permission = await geolocator.request_permission()
+            print(f"权限状态: {permission}")
+            
+            if permission == GeolocatorPermissionStatus.ALWAYS or \
+               permission == GeolocatorPermissionStatus.WHILE_IN_USE:
+                
+                # 2. 检查位置服务是否开启
+                if await geolocator.is_location_service_enabled():
+                    # 3. 配置位置参数
+                    # 使用正确的枚举值：LOWEST, LOW, MEDIUM, HIGH, BEST, BEST_FOR_NAVIGATION
+                    geolocator.configuration = GeolocatorConfiguration(
+                        accuracy=GeolocatorPositionAccuracy.LOW,  # 低精度，更快获取位置
+                        distance_filter=0,  # 所有移动都触发更新
+                    )
+                    
+                    # 4. 获取当前位置（这会触发前台服务启动）
+                    status_text.value = "状态: 获取位置中..."
+                    page.update()
+                    
+                    position = await geolocator.get_current_position()
+                    
+                    if position:
+                        status_text.value = f"✅ 前台服务已启动 位置: {position.latitude}, {position.longitude}"
+                    else:
+                        status_text.value = "⚠️ 无法获取位置，前台服务可能未启动"
+                else:
+                    status_text.value = "⚠️ 请开启位置服务"
+            else:
+                status_text.value = "⚠️ 需要位置权限才能启动后台服务"
+                
+        except Exception as e:
+            status_text.value = f"❌ 启动失败: {str(e)}"
+            print(f"详细错误: {e}")
+        
+        page.update()
+    
+    # 启动 geolocator
+    asyncio.create_task(start_geolocator())
+    
+    # 添加说明文字
+    #page.add(ft.Text("前台服务已启动后，应用将更难被系统杀死", size=12, color=ft.Colors.GREY))
+    page.add(ft.Text("事件提醒助手正在后台运行，随时为您提醒", size=12, color=ft.Colors.GREY))
+
     # ========== 添加这段代码来修复状态栏 ==========
     # 创建样式：透明背景 + 深色图标
     my_overlay_style = ft.SystemOverlayStyle(
@@ -945,6 +1012,11 @@ def main(page: ft.Page):
         
         # 添加一个标志防止重复播放
         is_playing_new = False
+
+        # ========== 添加监控任务变量 ==========
+        monitor_task = None
+        # 添加一个变量来存储当前位置（通过 on_position_change 更新）
+        current_position_sec = 0
         
         def on_state_change(e):
             global current_audio, is_playing
@@ -955,11 +1027,45 @@ def main(page: ft.Page):
                 print("音乐开始播放")
                 is_playing = True
                 is_playing_new = True
+
+                # ========== 启动监控任务（播放开始时） ==========
+                nonlocal monitor_task
+                if monitor_task:
+                    monitor_task.cancel()
+                
+                # ========== 修正后的监控代码 ==========
+                async def check_end():
+                    nonlocal current_position_sec
+                    while True:
+                        await asyncio.sleep(0.5)
+                        try:
+                            # 使用 on_position_change 更新的位置值
+                            if current_position_sec >= current_duration - 0.3:
+                                # 播放完成，重置进度条
+                                progress_slider.value = 0
+                                progress_text.value = f"0:00 / {format_time(current_duration)}"
+                                progress_slider.update()
+                                progress_text.update()
+                                print("监控检测到播放结束，进度条归零")
+                                break
+                        except Exception as ex:
+                            print(f"监控错误: {ex}")
+                            break
+                
+                monitor_task = asyncio.create_task(check_end())
+                # ========== 监控代码结束 ==========
             
             elif e.state == AudioState.COMPLETED:
                 print("音乐播放完成")
                 is_playing = False
                 current_audio = None
+
+                # ========== 重置进度条 ==========
+                progress_slider.value = 0
+                progress_text.value = f"0:00 / {format_time(current_duration)}"
+                progress_slider.update()
+                progress_text.update()
+                # ========== 重置结束 ==========
                 
                 # 如果需要循环播放
                 if loop and is_playing_new:
