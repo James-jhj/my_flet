@@ -1,6 +1,7 @@
 flet
 flet-audio
-flet_geolocator
+android-notify
+pyjnius
 lunardate
 requests
 mutagen
