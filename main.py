@@ -51,8 +51,8 @@ else:
         print("警告: pyncm 模块不可用")
 
 # ========== 版本信息 ==========
-APP_VERSION = "1.0.15"
-APP_VERSION_CODE = 15
+APP_VERSION = "1.0.16"
+APP_VERSION_CODE = 16
 # =============================
 
 class AnalogClock(ft.Container):
