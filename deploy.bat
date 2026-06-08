@@ -85,7 +85,7 @@ REM 下载 APK
 set DOWNLOAD_DIR=D:\apk_download
 if not exist "%DOWNLOAD_DIR%" mkdir "%DOWNLOAD_DIR%"
 
-set APK_NAME=birthday-reminder-v%NEW_VERSION%
+set APK_NAME=event_reminder_v%NEW_VERSION%
 echo Looking for APK: %APK_NAME%
 echo.
 
@@ -133,23 +133,23 @@ REM ========== 重命名 APK 文件 ==========
 echo.
 echo Renaming APK file...
 
-set OLD_APK=%DOWNLOAD_DIR%\birthday_reminder.apk
-set NEW_APK=%DOWNLOAD_DIR%\birthday_reminder_v%NEW_VERSION%.apk
+set OLD_APK=%DOWNLOAD_DIR%\event_reminder.apk
+set NEW_APK=%DOWNLOAD_DIR%\event_reminder_v%NEW_VERSION%.apk
 
 if exist "%OLD_APK%" (
-    ren "%OLD_APK%" "birthday_reminder_v%NEW_VERSION%.apk"
+    ren "%OLD_APK%" "event_reminder_v%NEW_VERSION%.apk"
     if errorlevel 1 (
         echo WARNING: Failed to rename
     ) else (
-        echo Renamed to: birthday_reminder_v%NEW_VERSION%.apk
-        set APK_NAME=birthday_reminder_v%NEW_VERSION%.apk
+        echo Renamed to: event_reminder_v%NEW_VERSION%.apk
+        set APK_NAME=event_reminder_v%NEW_VERSION%.apk
     )
 ) else (
-    echo WARNING: birthday_reminder.apk not found
+    echo WARNING: event_reminder.apk not found
     echo Looking for any APK file...
     for /r "%DOWNLOAD_DIR%" %%f in (*.apk) do (
         echo Found: %%f
-        ren "%%f" "birthday_reminder_v%NEW_VERSION%.apk" 2>nul
+        ren "%%f" "event_reminder_v%NEW_VERSION%.apk" 2>nul
     )
 )
 
@@ -158,8 +158,12 @@ echo ========================================
 echo ALL TASKS COMPLETED SUCCESSFULLY!
 echo   Version: v%NEW_VERSION%
 echo   Version Code: %NEW_VERSION_CODE%
-echo   APK Location: %DOWNLOAD_DIR%\birthday_reminder_v%NEW_VERSION%.apk
+echo   APK Location: %DOWNLOAD_DIR%\event_reminder_v%NEW_VERSION%.apk
 echo ========================================
 echo.
+
+REM ========== 打开 APK 所在目录 ==========
+echo Opening APK download directory...
+start "" "%DOWNLOAD_DIR%"
 
 pause

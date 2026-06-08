@@ -1,6 +1,10 @@
 flet
 flet-audio
-flet_geolocator
 lunardate
 requests
 mutagen
+zhdate
+openpyxl
+chinese-calendar
+pyjnius
+android-notify
