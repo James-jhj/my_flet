@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.22"
-APP_VERSION_CODE = 22
+APP_VERSION = "1.0.23"
+APP_VERSION_CODE = 23
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -2925,7 +2925,7 @@ def main(page: ft.Page):
         if hasattr(refresh_events_list, 'view_dropdown'):
             title_text = f"📆 每日事件 {len(daily_events)} 个" if daily_events else "📆 每日事件 0 个"
             events_list.controls.append(ft.Row([
-                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -2958,7 +2958,7 @@ def main(page: ft.Page):
         if hasattr(refresh_events_list, 'view_dropdown'):
             title_text = f"📆 每周事件 {len(weekly_events)} 个" if weekly_events else "📆 每周事件 0 个"
             events_list.controls.append(ft.Row([
-                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -3002,7 +3002,7 @@ def main(page: ft.Page):
         # 先添加标题行（包含下拉框），始终显示
         if hasattr(refresh_events_list, 'view_dropdown'):
             events_list.controls.append(ft.Row([
-                ft.Text(f"⏰ 预警事件 ({len(three_days_events)}) 个", size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(f"⏰ 预警事件 ({len(three_days_events)}) 个", size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -3277,14 +3277,15 @@ def main(page: ft.Page):
                     ft.dropdown.Option("once", "⏰ 一次性事件"),
                 ],
                 on_select=lambda e: on_view_change(e),
-                width=250,
+                #width=250,
+                expand=True,
             )
             refresh_events_list.view_dropdown.value = current_view
         
         # ========== 添加标题行（包含下拉框） ==========
         title_text = f"📋 全部事件 ({len(events)}个)" if events else "📋 全部事件 0 个"
         events_list.controls.append(ft.Row([
-            ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+            ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
             refresh_events_list.view_dropdown,
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
         events_list.controls.append(ft.Divider(height=10))
@@ -3373,7 +3374,7 @@ def main(page: ft.Page):
         # 先添加标题行（包含下拉框），始终显示
         if hasattr(refresh_events_list, 'view_dropdown'):
             events_list.controls.append(ft.Row([
-                ft.Text(f"📅 今日事件 ({len(today_events)}) 个", size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(f"📅 今日事件 ({len(today_events)}) 个", size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -3606,7 +3607,7 @@ def main(page: ft.Page):
         if hasattr(refresh_events_list, 'view_dropdown'):
             title_text = f"💰 每月事件 {len(monthly_events_list)} 个" if monthly_events_list else "💰 每月事件 0 个"
             events_list.controls.append(ft.Row([
-                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -3641,7 +3642,7 @@ def main(page: ft.Page):
         if hasattr(refresh_events_list, 'view_dropdown'):
             title_text = f"🎂 生日事件 {len(birthday_events_list)} 个" if birthday_events_list else "🎂 生日事件 0 个"
             events_list.controls.append(ft.Row([
-                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -3678,7 +3679,7 @@ def main(page: ft.Page):
         if hasattr(refresh_events_list, 'view_dropdown'):
             title_text = f"📖 纪念日事件 {len(event_events_list)} 个" if event_events_list else "📖 纪念日事件 0 个"
             events_list.controls.append(ft.Row([
-                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -3714,7 +3715,7 @@ def main(page: ft.Page):
         if hasattr(refresh_events_list, 'view_dropdown'):
             title_text = f"⏰ 一次性事件 {len(once_events_list)} 个" if once_events_list else "⏰ 一次性事件 0 个"
             events_list.controls.append(ft.Row([
-                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
@@ -4050,7 +4051,8 @@ def main(page: ft.Page):
                     ft.dropdown.Option("once", "⏰ 一次性事件"),
                 ],
                 on_select=lambda e: on_view_change(e),
-                width=250,
+                #width=250,
+                expand=True,
             )
             refresh_events_list.view_dropdown.value = current_view
 
@@ -4059,7 +4061,7 @@ def main(page: ft.Page):
         
         # 先添加标题行（包含下拉框）
         events_list.controls.append(ft.Row([
-            ft.Text(get_view_title(), size=18, weight=ft.FontWeight.BOLD),
+            ft.Text(get_view_title(), size=18, weight=ft.FontWeight.BOLD, expand=True),
             refresh_events_list.view_dropdown,
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
         events_list.controls.append(ft.Divider(height=10))
@@ -7076,6 +7078,7 @@ def main(page: ft.Page):
         f"{current_year}年{current_month}月",
         size=20,
         color=ft.Colors.BLACK,
+        weight=ft.FontWeight.BOLD,  # 添加这行
     )
 
     # 创建回到今天的圆形按钮（初始隐藏）
