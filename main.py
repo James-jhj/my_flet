@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.19"
-APP_VERSION_CODE = 19
+APP_VERSION = "1.0.20"
+APP_VERSION_CODE = 20
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -1375,7 +1375,8 @@ def main(page: ft.Page):
     # 先运行一次程序，从控制台获取设备ID，然后填在这里
     ALLOWED_DEVICES = [
         "6472c4db5200105e8788ba00aee9fe84",  # 开发者的window ID
-        "819374e1a2b43595a5da70474fcc7e4f",  # 开发者的手机 ID
+        "819374e1a2b43595a5da70474fcc7e4f",  # 开发者的手机 ID1
+        "49d8a4e0bdcd63998fb17e6033727d64",  # 开发者的手机 ID2
         #"",  # 可以添加多个
     ]
     
