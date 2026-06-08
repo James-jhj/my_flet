@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.18"
-APP_VERSION_CODE = 18
+APP_VERSION = "1.0.19"
+APP_VERSION_CODE = 19
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
