@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.24"
-APP_VERSION_CODE = 24
+APP_VERSION = "1.0.25"
+APP_VERSION_CODE = 25
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -2979,7 +2979,23 @@ def main(page: ft.Page):
         current_view = "daily"
         events_list.controls.clear()
         
-        daily_events = [event for event in events.values() if event.event_type == "daily"]
+        daily_events = []
+    
+        for event in events.values():
+            if event.event_type == "daily":
+                # 获取最早的提醒时间用于排序
+                earliest_time = "23:59"  # 默认最大值
+                if event.reminders:
+                    times = [r.get("time", "23:59") for r in event.reminders if r.get("enabled")]
+                    if times:
+                        earliest_time = min(times)  # 取最早的时间
+                daily_events.append({
+                    "event": event,
+                    "sort_time": earliest_time
+                })
+        
+        # 按提醒时间排序（由早到晚）
+        daily_events.sort(key=lambda x: x["sort_time"])
         
         # ========== 始终显示标题行和下拉框 ==========
         if hasattr(refresh_events_list, 'view_dropdown'):
@@ -3001,8 +3017,8 @@ def main(page: ft.Page):
                 )
             )
         else:
-            for event in daily_events:
-                display_event_card(event, is_filter_mode=True)
+            for item in daily_events:
+                display_event_card(item["event"], is_filter_mode=True)
         
         page.update()
     
@@ -3011,8 +3027,20 @@ def main(page: ft.Page):
         global current_view, events_list
         current_view = "weekly"
         events_list.controls.clear()
+
+        weekly_events = []
+        today = datetime.now().date()
         
-        weekly_events = [event for event in events.values() if event.event_type == "weekly"]
+        for event in events.values():
+            if event.event_type == "weekly":
+                month, day, year, base_year, days_until = event.get_next_date_info()
+                weekly_events.append({
+                    "event": event,
+                    "days_until": days_until
+                })
+        
+        # 按剩余天数排序（由近到远）
+        weekly_events.sort(key=lambda x: x["days_until"])
 
         # ========== 始终显示标题行和下拉框 ==========
         if hasattr(refresh_events_list, 'view_dropdown'):
@@ -3033,8 +3061,8 @@ def main(page: ft.Page):
                 )
             )
         else:
-            for event in weekly_events:
-                display_event_card(event, is_filter_mode=True)
+            for item in weekly_events:
+                display_event_card(item["event"], is_filter_mode=True)
         
         page.update()
 
@@ -3057,6 +3085,7 @@ def main(page: ft.Page):
             if 0 < days_until <= 3:
                 three_days_events.append((event, days_until))
         
+        # 按剩余天数排序（由近到远）
         three_days_events.sort(key=lambda x: x[1])
         
         # 先添加标题行（包含下拉框），始终显示
@@ -3384,6 +3413,13 @@ def main(page: ft.Page):
                 age_text = "📆 每月提醒"
             elif event.event_type == "daily":
                 age_text = "📆 每天提醒"
+                # 对于每日事件，获取最早的提醒时间用于排序
+                earliest_time = "23:59"
+                if event.reminders:
+                    times = [r.get("time", "23:59") for r in event.reminders if r.get("enabled")]
+                    if times:
+                        earliest_time = min(times)
+                days_until = earliest_time  # 特殊处理：用时间字符串作为排序依据
             elif event.event_type == "weekly":
                 age_text = "📅 每周提醒"
             elif event.repeat_type == "once":
@@ -3401,10 +3437,21 @@ def main(page: ft.Page):
                 "day": day,
                 "age_text": age_text,
                 "days_until": days_until,
-                "base_year": base_year
+                "base_year": base_year,
+                "event_type": event.event_type  # 添加事件类型用于排序
             })
         
-        all_events_list.sort(key=lambda x: x["days_until"])
+        # 自定义排序函数
+        def sort_key(item):
+            event_type = item["event_type"]
+            if event_type == "daily":
+                # 每日事件按提醒时间排序（字符串格式 "HH:MM"）
+                return (0, item["days_until"])  # 类型优先级0，按时间字符串排序
+            else:
+                # 其他事件按剩余天数排序（整数）
+                return (1, item["days_until"])  # 类型优先级1，按天数排序
+        
+        all_events_list.sort(key=sort_key)
         
         for info in all_events_list:
             display_event_card(info["event"], is_filter_mode=True)
@@ -3730,24 +3777,32 @@ def main(page: ft.Page):
         """显示每月事件列表"""
         global current_view, current_playing_event_id, current_music_state
         current_view = "monthly"
-        
         events_list.controls.clear()
         
-        monthly_events_list = []
+        monthly_events = []
+        today = datetime.now().date()
+        
         for event in events.values():
             if event.event_type == "monthly":
-                monthly_events_list.append(event)
+                month, day, year, base_year, days_until = event.get_next_date_info()
+                monthly_events.append({
+                    "event": event,
+                    "days_until": days_until
+                })
+        
+        # 按剩余天数排序（每月事件的剩余天数是指距离下一个提醒日的天数）
+        monthly_events.sort(key=lambda x: x["days_until"])
         
         # ========== 始终显示标题行和下拉框 ==========
         if hasattr(refresh_events_list, 'view_dropdown'):
-            title_text = f"💰 每月事件 {len(monthly_events_list)} 个" if monthly_events_list else "💰 每月事件 0 个"
+            title_text = f"💰 每月事件 {len(monthly_events)} 个" if monthly_events else "💰 每月事件 0 个"
             events_list.controls.append(ft.Row([
                 ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
 
-        if not monthly_events_list:
+        if not monthly_events:
             events_list.controls.append(
                 ft.Container(
                     content=ft.Column([
@@ -3757,32 +3812,41 @@ def main(page: ft.Page):
                 )
             )
         else:
-            for event in monthly_events_list:
-                display_event_card(event, is_filter_mode=True)
+            for item in monthly_events:
+                display_event_card(item["event"], is_filter_mode=True)
         page.update()
 
     def show_birthday_events():
         """显示生日事件列表"""
         global current_view, current_playing_event_id, current_music_state
         current_view = "birthday"
-        
         events_list.controls.clear()
         
-        birthday_events_list = []
+        birthday_events = []
+        today = datetime.now().date()
+        
         for event in events.values():
             if event.event_type == "birthday":
-                birthday_events_list.append(event)
+                month, day, year, base_year, days_until = event.get_next_date_info()
+                birthday_events.append({
+                    "event": event,
+                    "days_until": days_until,
+                    "base_year": base_year
+                })
+        
+        # 按剩余天数排序
+        birthday_events.sort(key=lambda x: x["days_until"])
 
         # ========== 始终显示标题行和下拉框 ==========
         if hasattr(refresh_events_list, 'view_dropdown'):
-            title_text = f"🎂 生日事件 {len(birthday_events_list)} 个" if birthday_events_list else "🎂 生日事件 0 个"
+            title_text = f"🎂 生日事件 {len(birthday_events)} 个" if birthday_events else "🎂 生日事件 0 个"
             events_list.controls.append(ft.Row([
                 ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
         
-        if not birthday_events_list:
+        if not birthday_events:
             events_list.controls.append(
                 ft.Container(
                     content=ft.Column([
@@ -3792,8 +3856,8 @@ def main(page: ft.Page):
                 )
             )
         else:
-            for event in birthday_events_list:
-                display_event_card(event, is_filter_mode=True)
+            for item in birthday_events:
+                display_event_card(item["event"], is_filter_mode=True)
         
         page.update()
         
@@ -3802,13 +3866,22 @@ def main(page: ft.Page):
         """显示纪念日事件列表"""
         global current_view, current_playing_event_id, current_music_state
         current_view = "event"
-        
         events_list.controls.clear()
         
         event_events_list = []
+        today = datetime.now().date()
+        
         for event in events.values():
             if event.event_type == "event":
-                event_events_list.append(event)
+                month, day, year, base_year, days_until = event.get_next_date_info()
+                event_events_list.append({
+                    "event": event,
+                    "days_until": days_until,
+                    "base_year": base_year
+                })
+        
+        # 按剩余天数排序
+        event_events_list.sort(key=lambda x: x["days_until"])
 
         # ========== 始终显示标题行和下拉框 ==========
         if hasattr(refresh_events_list, 'view_dropdown'):
@@ -3829,8 +3902,8 @@ def main(page: ft.Page):
                 )
             )
         else:
-            for event in event_events_list:
-                display_event_card(event, is_filter_mode=True)
+            for item in event_events_list:
+                display_event_card(item["event"], is_filter_mode=True)
 
         page.update()
 
@@ -3838,13 +3911,22 @@ def main(page: ft.Page):
         """显示一次性事件列表"""
         global current_view, current_playing_event_id, current_music_state
         current_view = "once"
-        
         events_list.controls.clear()
         
         once_events_list = []
+        today = datetime.now().date()
+        
         for event in events.values():
-            if event.repeat_type == "once":
-                once_events_list.append(event)
+            if event.event_type == "once":
+                month, day, year, base_year, days_until = event.get_next_date_info()
+                once_events_list.append({
+                    "event": event,
+                    "days_until": days_until,
+                    "base_year": base_year
+                })
+        
+        # 按剩余天数排序
+        once_events_list.sort(key=lambda x: x["days_until"])
 
         # ========== 始终显示标题行和下拉框 ==========
         if hasattr(refresh_events_list, 'view_dropdown'):
@@ -3865,8 +3947,8 @@ def main(page: ft.Page):
                 )
             )
         else:
-            for event in once_events_list:
-                display_event_card(event, is_filter_mode=True)
+            for item in once_events_list:
+                display_event_card(item["event"], is_filter_mode=True)
         
         page.update()
 
