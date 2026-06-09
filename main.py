@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.25"
-APP_VERSION_CODE = 25
+APP_VERSION = "1.0.26"
+APP_VERSION_CODE = 26
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -1534,7 +1534,7 @@ def main(page: ft.Page):
     
     events = {}
     selected_event = None
-    current_view = "all"  # 可选值: "today", "three_days", "all", "daily", "weekly"
+    current_view = "daily"  # 可选值: "today", "three_days", "all", "daily", "weekly"
     current_date = datetime.now().date()
     dialog_container = None
 
@@ -2979,6 +2979,8 @@ def main(page: ft.Page):
         current_view = "daily"
         events_list.controls.clear()
         
+        print(f"[DEBUG] show_daily_events 被调用, current_view={current_view}")
+        print(f"[show_daily_events] 当前事件总数: {len(events)}")
         daily_events = []
     
         for event in events.values():
@@ -2994,6 +2996,8 @@ def main(page: ft.Page):
                     "sort_time": earliest_time
                 })
         
+        print(f"[show_daily_events] 每日事件数量: {len(daily_events)}")
+
         # 按提醒时间排序（由早到晚）
         daily_events.sort(key=lambda x: x["sort_time"])
         
@@ -3021,6 +3025,7 @@ def main(page: ft.Page):
                 display_event_card(item["event"], is_filter_mode=True)
         
         page.update()
+        print(f"[show_daily_events] 刷新完成")
     
     def show_weekly_events():
         """显示每周事件列表"""
@@ -4092,7 +4097,7 @@ def main(page: ft.Page):
         #刷新事件列表，支持按日期筛选
 
         global current_playing_event_id, current_music_state , three_days_events, current_view
-        print(f"[refresh_events_list] 开始刷新 - filter_date: {filter_date}, current_view: {current_view}")
+        print(f"[DEBUG] refresh_events_list 被调用, filter_date={filter_date}, current_view={current_view}")
         events_list.controls.clear()
         today = datetime.now().date()
         
@@ -4327,16 +4332,35 @@ def main(page: ft.Page):
             title_text = "📅 今日事件"
             display_events = today_events
             if not display_events:
-                # 没有今日事件，显示提示，但保留切换视图按钮
-                title_text = "📅 今日事件"
-    
-                # 全部事件始终有标题，不隐藏分割线
                 events_list.controls.append(ft.Text("🎉 今日没有事件", size=14, color=ft.Colors.GREEN_700))
-                
-                # 只有在有事件的情况下才显示标题行和分割线
                 update_event_count()
                 page.update()
-                return  # 直接返回，不继续执行后面的代码
+                return
+        elif current_view == "all":
+            title_text = "📋 全部事件"
+            display_events = sorted(all_events, key=lambda x: x["days_until"])
+        elif current_view == "daily":
+            # 调用专门的每日事件显示函数
+            show_daily_events()
+            return
+        elif current_view == "weekly":
+            show_weekly_events()
+            return
+        elif current_view == "monthly":
+            show_monthly_events()
+            return
+        elif current_view == "three_days":
+            show_three_days_events()
+            return
+        elif current_view == "birthday":
+            show_birthday_events()
+            return
+        elif current_view == "event":
+            show_event_events()
+            return
+        elif current_view == "once":
+            show_once_events()
+            return
         else:
             title_text = "📋 全部事件"
             display_events = sorted(all_events, key=lambda x: x["days_until"])
@@ -7231,7 +7255,7 @@ def main(page: ft.Page):
         time_thread.start()
         
         print("后台定时检查已启动（每小时检查事件）")
-        print("时间提醒检查已启动（每半分钟检查）")
+        print("时间提醒检查已启动（每2分钟检查）")
 
 
     def number_to_chinese_month(month):
@@ -8639,6 +8663,8 @@ def main(page: ft.Page):
         today = datetime.now().date()
         has_today_event = False
         has_warning_event = False
+
+        print(f"[DEBUG] determine_startup_view 被调用")
         
         # 检查是否有今日事件（不包括每日和每周事件）
         for event in events.values():
@@ -8664,6 +8690,8 @@ def main(page: ft.Page):
         
         # 检查是否有3日内事件（不包括今天）
         for event in events.values():
+            if event.event_type == "daily" or event.event_type == "weekly":
+                continue
             month, day, year, base_year, days_until = event.get_next_date_info()
             if event.repeat_type == "once":
                 if event.completed or days_until < 0:
@@ -8681,28 +8709,28 @@ def main(page: ft.Page):
                 # ========== 同步更新下拉框的值 ==========
                 if hasattr(refresh_events_list, 'view_dropdown'):
                     refresh_events_list.view_dropdown.value = "today"
-                show_bottom_message("📅 今日有事件，自动切换到今日事件视图")
                 show_today_events()
+                show_bottom_message("📅 今日有事件，自动切换到今日事件视图")
         elif has_warning_event:
             if current_view != "three_days":
                 current_view = "three_days"
                 # ========== 同步更新下拉框的值 ==========
                 if hasattr(refresh_events_list, 'view_dropdown'):
                     refresh_events_list.view_dropdown.value = "three_days"
-                # 延迟调用，确保页面已加载
-                threading.Timer(0.5, lambda: show_three_days_events()).start()
+                show_three_days_events()
                 show_bottom_message("⏰ 未来3天有事件，自动切换到预警事件视图")
         else:
-            current_view = "all"
-            # ========== 同步更新下拉框的值 ==========
-            if hasattr(refresh_events_list, 'view_dropdown'):
-                refresh_events_list.view_dropdown.value = "all"
-            show_bottom_message("📋 切换到全部事件视图")
-            display_all_events()
+            # 没有今日事件和预警事件时，切换到每日事件视图
+            if current_view != "daily":
+                current_view = "daily"
+                # ========== 同步更新下拉框的值 ==========
+                if hasattr(refresh_events_list, 'view_dropdown'):
+                    refresh_events_list.view_dropdown.value = "daily"
+                show_daily_events()
+                show_bottom_message("📆 切换到每日事件视图")
 
-    # 执行启动视图选择
-    #determine_startup_view()
-    threading.Timer(0.5, determine_startup_view).start()
+        # 强制更新页面
+        page.update()
 
     # ========== 设置页面关闭回调 ==========
     def on_page_close():
@@ -8858,7 +8886,7 @@ def main(page: ft.Page):
 
     asyncio.create_task(auto_refresh())
 
-    refresh_events_list()
+    #refresh_events_list()
 
     # 手动调用一次，确保初始状态正确
     update_current_playing_info()
