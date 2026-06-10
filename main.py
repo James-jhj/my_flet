@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.26"
-APP_VERSION_CODE = 26
+APP_VERSION = "1.0.27"
+APP_VERSION_CODE = 27
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -3209,28 +3209,46 @@ def main(page: ft.Page):
         # 创建菜单容器
         menu_content = ft.Container(
             content=ft.Column([
-                ft.Text("选择查看", size=16, weight=ft.FontWeight.BOLD),
-                ft.Divider(height=5),
-                ft.Column(menu_items_content, spacing=8),
-                ft.Divider(height=5),
+                # 顶部装饰条
+                ft.Container(
+                    height=4,
+                    width=60,
+                    bgcolor=ft.Colors.BLUE_700,
+                    border_radius=2,
+                ),
+                ft.Container(height=10),
+                # 图标
+                ft.Icon(ft.Icons.EVENT_NOTE, size=48, color=ft.Colors.BLUE_700),
+                ft.Text("事件选择", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                ft.Text("请选择要查看的事件类型", size=12, color=ft.Colors.GREY_500),
+                ft.Divider(height=1, color=ft.Colors.GREY_200),
+                ft.Column(menu_items_content, spacing=10),
+                ft.Divider(height=1, color=ft.Colors.GREY_200),
                 ft.Row([
-                    ft.ElevatedButton(
+                    ft.FilledButton(
                         "全部事件",
                         on_click=create_callback("all"),
                         expand=True,
+                        icon=ft.Icons.VIEW_LIST,
                     ),
-                    ft.ElevatedButton(
+                    ft.OutlinedButton(
                         "取消",
                         on_click=lambda e: close_menu(),
                         expand=True,
-                        style=ft.ButtonStyle(bgcolor=ft.Colors.GREY_100, color=ft.Colors.GREY_700),
+                        icon=ft.Icons.CLOSE,
                     ),
-                ], spacing=8),
-            ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=280,
+                ], spacing=12),
+            ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=340,
             padding=20,
             bgcolor=ft.Colors.WHITE,
-            border_radius=16,
+            border_radius=24,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=20,
+                color=ft.Colors.BLACK12,
+                offset=ft.Offset(0, 4),
+            ),
         )
         
         menu_container = ft.Container(
@@ -3513,6 +3531,12 @@ def main(page: ft.Page):
         
         today = datetime.now().date()
         month, day, year, base_year, days_until = event.get_next_date_info()
+
+        # ========== 统一背景色和状态文字颜色 ==========
+        # 所有卡片使用统一的白色背景，状态文字使用灰色
+        bg_color = ft.Colors.WHITE
+        status_color = ft.Colors.GREY_600
+        status_text = ""
         
         # ========== 确定状态文本和背景色 ==========
         if is_filter_mode:
@@ -3520,55 +3544,55 @@ def main(page: ft.Page):
             if month == today.month and day == today.day:
                 status_text = "今天"
                 status_color = ft.Colors.RED_700
-                bg_color = ft.Colors.RED_50
+                #bg_color = ft.Colors.RED_50
             elif days_until < 0:
                 status_text = "已过期"
                 status_color = ft.Colors.GREY_500
-                bg_color = ft.Colors.GREY_100
+                #bg_color = ft.Colors.GREY_100
             else:
                 status_text = f"还剩 {days_until} 天"
                 status_color = ft.Colors.BLUE_700
-                bg_color = ft.Colors.WHITE
+                #bg_color = ft.Colors.WHITE
         else:
             # 正常视图下的状态判断
             if event.event_type == "daily":
                 status_text = "每天"
                 status_color = ft.Colors.PURPLE_700
-                bg_color = ft.Colors.PURPLE_50
+                #bg_color = ft.Colors.PURPLE_50
             elif event.event_type == "weekly":
                 status_text = "每周"
                 status_color = ft.Colors.TEAL_700
-                bg_color = ft.Colors.TEAL_50
+                #bg_color = ft.Colors.TEAL_50
             elif event.repeat_type == "once":
                 if event.completed:
                     status_text = "已完成"
                     status_color = ft.Colors.GREY_500
-                    bg_color = ft.Colors.GREY_100
+                    #bg_color = ft.Colors.GREY_100
                 elif days_until < 0:
                     status_text = "已过期"
                     status_color = ft.Colors.GREY_500
-                    bg_color = ft.Colors.GREY_100
+                    #bg_color = ft.Colors.GREY_100
                 elif days_until == 0:
                     status_text = "今天"
                     status_color = ft.Colors.RED_700
-                    bg_color = ft.Colors.RED_50
+                    #bg_color = ft.Colors.RED_50
                 else:
                     status_text = f"还剩 {days_until} 天"
                     status_color = ft.Colors.ORANGE_700
-                    bg_color = ft.Colors.ORANGE_50
+                    #bg_color = ft.Colors.ORANGE_50
             else:
                 if days_until == 0:
                     status_text = "今天"
                     status_color = ft.Colors.RED_700
-                    bg_color = ft.Colors.RED_50
+                    #bg_color = ft.Colors.RED_50
                 elif days_until <= 7:
                     status_text = f"还剩 {days_until} 天"
                     status_color = ft.Colors.ORANGE_700
-                    bg_color = ft.Colors.ORANGE_50
+                    #bg_color = ft.Colors.ORANGE_50
                 else:
                     status_text = f"还剩 {days_until} 天"
                     status_color = ft.Colors.BLUE_700
-                    bg_color = ft.Colors.WHITE
+                    #bg_color = ft.Colors.WHITE
         
         # ========== 获取事件图标和显示日期 ==========
         calendar_icon = get_event_icon(event)
@@ -4638,14 +4662,11 @@ def main(page: ft.Page):
         refresh_events_list()
         show_bottom_message(f"已切换到{'全部事件' if current_view == 'all' else '今日事件'}")
     
-
-    
-
     def show_bottom_message(message, is_error=False):
-        """在底部显示信息（替代snack_bar）"""
+        """显示底部消息（使用 SnackBar）"""
         print(f"[底部消息] {message}")
         
-        # 根据消息类型设置颜色
+        # 根据消息类型设置颜色和图标
         if "✅" in message or "成功" in message or "完成" in message:
             color = ft.Colors.GREEN_700
             icon = "✅ "
@@ -4659,19 +4680,35 @@ def main(page: ft.Page):
             color = ft.Colors.BLUE_700
             icon = "ℹ️ "
         
-        # 更新底部信息
-        bottom_info_text.value = f"{icon}{message}"
-        bottom_info_text.color = color
-        bottom_info_text.update()
-        
-        # 3秒后恢复默认状态
-        def reset_message():
-            time.sleep(3)
-            bottom_info_text.value = "✅ 准备就绪"
-            bottom_info_text.color = ft.Colors.GREY_600
-            bottom_info_text.update()
-        
-        threading.Thread(target=reset_message, daemon=True).start()
+        # 使用 SnackBar 显示消息
+        try:
+            if hasattr(page, 'show_snack_bar'):
+                page.show_snack_bar(
+                    ft.SnackBar(
+                        content=ft.Text(f"{icon}{message}"),
+                        bgcolor=color,
+                        duration=3000,
+                        behavior=ft.SnackBarBehavior.FLOATING,
+                    )
+                )
+            else:
+                snack = ft.SnackBar(
+                    content=ft.Text(f"{icon}{message}"),
+                    bgcolor=color,
+                    open=True,
+                    duration=3000,
+                )
+                page.overlay.append(snack)
+                snack.open = True
+                page.update()
+                def close_snack():
+                    time.sleep(3)
+                    if snack in page.overlay:
+                        page.overlay.remove(snack)
+                        page.update()
+                threading.Thread(target=close_snack, daemon=True).start()
+        except Exception as e:
+            print(f"显示 SnackBar 失败: {e}")
     
     # 保留原有的 show_snack_bar 作为兼容
     def show_snack_bar(message):
@@ -4962,23 +4999,6 @@ def main(page: ft.Page):
                 month = local_date.month
                 day = local_date.day
                 
-                # 创建新的 day_field
-                new_day_field = ft.TextField(
-                    label="日", 
-                    value=f"{day:02d}", 
-                    expand=True,
-                    text_align=ft.TextAlign.CENTER,
-                )
-                
-                # 替换旧的（这一步已经将新控件添加到页面了）
-                date_row.controls[4].content = new_day_field
-                monthly_day_row.controls[0].content = new_day_field
-                
-                # 更新全局变量
-                global day_field
-                day_field = new_day_field
-                
-                # 更新其他字段
                 # 增加判断，如果是每月事件，只需要显示一个日
                 print(f'打印事件类型测试：{event_type.value}')
                 if event_type.value == "monthly":
@@ -4986,20 +5006,8 @@ def main(page: ft.Page):
                 else:
                     date_display_field.value = f"{year:04d}-{month:02d}-{day:02d}"
 
-                #date_display_field.value = f"{year:04d}-{month:02d}-{day:02d}"
-                year_field.value = str(year)
-                month_field.value = f"{month:02d}"
-                
-                # 更新控件（注意：不要调用 day_field.update()，因为它刚被添加）
-                date_display_field.update()
-                year_field.update()
-                month_field.update()
-                # day_field.update()  # 移除这行！控件刚被添加到页面，不需要单独更新
-                
                 # 直接更新整个页面
                 page.update()
-        
-        
 
 
         # ========== 1. 先定义 update_date_visibility 函数 ==========
@@ -5012,8 +5020,6 @@ def main(page: ft.Page):
             
             if event_type.value == "daily":
                 # 每天提醒：隐藏所有日期控件，显示工作日选项
-                date_row.visible = False
-                monthly_day_row.visible = False
                 weekday_row.visible = False
                 calendar_type.visible = False
                 repeat_type.visible = False
@@ -5023,8 +5029,6 @@ def main(page: ft.Page):
                 
             elif event_type.value == "weekly":
                 # 每周提醒：隐藏日期选择器，隐藏工作日选项
-                date_row.visible = False        # 隐藏年月日行
-                monthly_day_row.visible = False
                 weekday_row.visible = True      # 显示星期选择
                 calendar_type.visible = False   # 隐藏历法选择
                 repeat_type.visible = False
@@ -5034,8 +5038,6 @@ def main(page: ft.Page):
                 
             elif event_type.value == "monthly":
                 # 每月提醒：只显示日，隐藏工作日选项
-                date_row.visible = False
-                monthly_day_row.visible = True
                 weekday_row.visible = False
                 calendar_type.visible = False
                 repeat_type.visible = False
@@ -5045,8 +5047,6 @@ def main(page: ft.Page):
                 
             elif event_type.value == "once":
                 # 一次性事件：显示完整日期和日期选择器，隐藏工作日选项
-                date_row.visible = True
-                monthly_day_row.visible = False
                 weekday_row.visible = False
                 calendar_type.visible = True
                 repeat_type.visible = False
@@ -5056,8 +5056,6 @@ def main(page: ft.Page):
                 
             else:
                 # 生日/纪念日：显示完整日期和日期选择器，隐藏工作日选项
-                date_row.visible = True
-                monthly_day_row.visible = False
                 weekday_row.visible = False
                 calendar_type.visible = True
                 repeat_type.visible = True
@@ -5116,11 +5114,6 @@ def main(page: ft.Page):
             if selected_key == "birthday":
                 name_field.label = "姓名"
                 calendar_type.visible = True
-                year_field.visible = True
-                month_field.visible = True
-                day_field.visible = True
-                date_row.visible = True
-                monthly_day_row.visible = False
                 weekday_row.visible = False  # 隐藏星期选择行
                 repeat_type.visible = True
                 repeat_type.value = "yearly"
@@ -5130,11 +5123,6 @@ def main(page: ft.Page):
             elif selected_key == "event":
                 name_field.label = "事件名称"
                 calendar_type.visible = True
-                year_field.visible = True
-                month_field.visible = True
-                day_field.visible = True
-                date_row.visible = True
-                monthly_day_row.visible = False
                 weekday_row.visible = False
                 repeat_type.visible = True
                 date_display_field.visible = True  # 显示日期选择器
@@ -5143,11 +5131,6 @@ def main(page: ft.Page):
             elif selected_key == "monthly":
                 name_field.label = "事件名称"
                 calendar_type.visible = False
-                year_field.visible = False
-                month_field.visible = False
-                day_field.visible = True
-                date_row.visible = False
-                monthly_day_row.visible = True
                 weekday_row.visible = False
                 repeat_type.visible = False
                 repeat_type.value = "monthly"
@@ -5157,11 +5140,6 @@ def main(page: ft.Page):
             elif selected_key == "once":
                 name_field.label = "事件名称"
                 calendar_type.visible = True
-                year_field.visible = True
-                month_field.visible = True
-                day_field.visible = True
-                date_row.visible = True
-                monthly_day_row.visible = False
                 weekday_row.visible = False
                 repeat_type.visible = False
                 repeat_type.value = "once"
@@ -5172,11 +5150,6 @@ def main(page: ft.Page):
             elif selected_key == "daily":
                 name_field.label = "事件名称"
                 calendar_type.visible = False
-                year_field.visible = False
-                month_field.visible = False
-                day_field.visible = False
-                date_row.visible = False
-                monthly_day_row.visible = False
                 weekday_row.visible = False  # 隐藏星期选择行
                 repeat_type.visible = False
                 repeat_type.value = "daily"
@@ -5187,11 +5160,6 @@ def main(page: ft.Page):
             elif selected_key == "weekly":
                 name_field.label = "事件名称"
                 calendar_type.visible = False   # 每周提醒不需要历法
-                year_field.visible = False
-                month_field.visible = False
-                day_field.visible = False
-                date_row.visible = False        # 隐藏年月日行
-                monthly_day_row.visible = False
                 weekday_row.visible = True      # 显示星期选择
                 repeat_type.visible = False
                 repeat_type.value = "weekly"
@@ -5772,67 +5740,6 @@ def main(page: ft.Page):
         else:
             year_default = "1990"
 
-        year_field = ft.TextField(
-            label="年", 
-            value=year_default, 
-            expand=True,
-            text_align=ft.TextAlign.CENTER,
-            visible=True,
-            read_only=True,  # 设置为只读
-            bgcolor=ft.Colors.GREY_50,  # 添加灰色背景，提示不可编辑
-        )
-
-        # 月份输入框（每月提醒时隐藏）
-        # 月份输入框
-        if selected_event and selected_event.event_type == "monthly":
-            month_default = "01"
-        elif selected_event and selected_event.event_type == "daily":
-            month_default = "01"
-        elif selected_event and selected_event.event_type == "weekly":
-            month_default = "01"
-        elif selected_event and selected_event.birth_date:
-            parts = selected_event.birth_date.split("-")
-            if len(parts) >= 2:
-                month_default = parts[1]
-            else:
-                month_default = "01"
-        else:
-            month_default = "01"
-
-        month_field = ft.TextField(
-            label="月", 
-            value=month_default, 
-            expand=True,
-            text_align=ft.TextAlign.CENTER,
-            read_only=True,  # 设置为只读
-            bgcolor=ft.Colors.GREY_50,  # 添加灰色背景，提示不可编辑
-        )
-
-        # 日期输入框
-        if selected_event and selected_event.event_type == "monthly":
-            day_default = selected_event.birth_date
-        elif selected_event and selected_event.event_type == "daily":
-            day_default = "01"
-        elif selected_event and selected_event.event_type == "weekly":
-            day_default = selected_event.birth_date if selected_event.birth_date else "1"
-        elif selected_event and selected_event.birth_date:
-            parts = selected_event.birth_date.split("-")
-            if len(parts) >= 3:
-                day_default = parts[2]
-            else:
-                day_default = "01"
-        else:
-            day_default = "01"
-
-        day_field = ft.TextField(
-            label="日", 
-            value=day_default, 
-            expand=True,
-            text_align=ft.TextAlign.CENTER,
-            read_only=True,  # 设置为只读
-            bgcolor=ft.Colors.GREY_50,  # 添加灰色背景，提示不可编辑
-        )
-
         # ========== 每周提醒专用的星期选择行 ==========
         # 获取当前星期几（1-7，周一为1，周日为7）
         current_weekday = datetime.now().isoweekday()  # 返回 1-7，1=周一，7=周日
@@ -5864,30 +5771,6 @@ def main(page: ft.Page):
             ],
             alignment=ft.MainAxisAlignment.CENTER,
             visible=False,  # 默认隐藏
-        )
-
-        # ========== 每月提醒专用的日期行（只有日） ==========
-        monthly_day_row = ft.Row(
-            [
-                ft.Container(day_field, width=100),
-                ft.Text("日", size=14),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            visible=False,  # 默认隐藏
-        )
-
-        # 原有的日期行（年、月、日）
-        date_row = ft.Row(
-            [
-                ft.Container(year_field, width=80),
-                ft.Text("年", size=14),
-                ft.Container(month_field, width=60),
-                ft.Text("月", size=14),
-                ft.Container(day_field, width=60),
-                ft.Text("日", size=14),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            visible=True,  # 默认显示
         )
         
         calendar_type = ft.Dropdown(
@@ -6252,39 +6135,64 @@ def main(page: ft.Page):
             music_field.value = selected_event.sound_file if selected_event.sound_file else ""
             
             # 根据事件类型设置日期
+            # ========== 根据事件类型设置日期 ==========
             # 每日事件
             if selected_event.event_type == "daily":
                 date_display_field.visible = False
+                date_display_field.value = ""
             
             # 每周事件
             elif selected_event.event_type == "weekly":
                 date_display_field.visible = False
+                date_display_field.value = ""
+                # 设置星期
+                if selected_event.birth_date:
+                    weekday_field.value = selected_event.birth_date
             
             # 每月事件
             elif selected_event.event_type == "monthly":
-                day_num = int(selected_event.birth_date)
-                day_field.value = f"{day_num:02d}"
+                date_display_field.visible = True
+                day_num = int(selected_event.birth_date) if selected_event.birth_date else 1
                 date_display_field.value = f"{day_num:02d}"
-                #date_display_field.read_only = True
-                #date_display_field.on_click = None
-                
+                # 设置日期选择器的初始值
+                try:
+                    now = datetime.now()
+                    initial_date = datetime(now.year, now.month, day_num)
+                    date_picker.value = initial_date
+                except:
+                    pass
+            
             # 一次性事件
             elif selected_event.repeat_type == "once":
+                date_display_field.visible = True
                 date_parts = selected_event.birth_date.split("-")
                 if len(date_parts) == 3:
-                    year_field.value = date_parts[0]
-                    month_field.value = date_parts[1]
-                    day_field.value = date_parts[2]
-                    date_display_field.value = f"{date_parts[0]}-{date_parts[1]}-{date_parts[2]}"
-
+                    year = int(date_parts[0])
+                    month = int(date_parts[1])
+                    day = int(date_parts[2])
+                    date_display_field.value = f"{year:04d}-{month:02d}-{day:02d}"
+                    # 设置日期选择器的初始值
+                    try:
+                        initial_date = datetime(year, month, day)
+                        date_picker.value = initial_date
+                    except:
+                        pass
+            
             # 生日或纪念日
             else:
+                date_display_field.visible = True
                 date_parts = selected_event.birth_date.split("-")
                 if len(date_parts) == 3:
-                    year_field.value = date_parts[0]
-                    month_field.value = date_parts[1]
-                    day_field.value = date_parts[2]
-                    date_display_field.value = f"{date_parts[0]}-{date_parts[1]}-{date_parts[2]}"
+                    year = int(date_parts[0])
+                    month = int(date_parts[1])
+                    day = int(date_parts[2])
+                    date_display_field.value = f"{year:04d}-{month:02d}-{day:02d}"
+                    # 设置日期选择器的初始值
+                    try:
+                        initial_date = datetime(year, month, day)
+                        date_picker.value = initial_date
+                    except:
+                        pass
 
         # 定义取消函数（放在这里，在使用之前）
         def cancel_click(e):
@@ -6492,14 +6400,18 @@ def main(page: ft.Page):
             initial_workday_only = getattr(selected_event, 'workday_only', False)
 
         workday_only_switch = ft.Switch(
-            value=initial_workday_only,  # 设置初始值
-            active_color=ft.Colors.BLUE_700,
+            value=initial_workday_only,
+            active_color=ft.Colors.BLUE_600,
+            inactive_thumb_color=ft.Colors.GREY_500,
+            inactive_track_color=ft.Colors.GREY_300,
+            active_track_color=ft.Colors.BLUE_100,
+            adaptive=True,
         )
 
         workday_only_checkbox = ft.Row([
-            ft.Text("法定工作日（智能跳过节假日）", size=13, color=ft.Colors.BLACK),
+            ft.Text("法定工作日（智能跳过节假日）", size=13, color=ft.Colors.GREY_800),
             workday_only_switch,
-        ], spacing=10, alignment=ft.MainAxisAlignment.START)
+        ], spacing=12, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
         # 保存到函数属性，方便其他地方访问
         open_add_dialog.workday_only_checkbox = workday_only_checkbox
@@ -6566,9 +6478,7 @@ def main(page: ft.Page):
             event_type,
             name_field,
             ft.Row([date_display_field], alignment=ft.MainAxisAlignment.CENTER),
-            date_row,           # 年/月/日输入（生日/纪念日/一次性使用）
             weekday_row,        # 星期选择（每周提醒使用）
-            monthly_day_row,    # 只有日的输入（每月提醒使用）
             calendar_type,      # 历法选择（生日/纪念日/一次性使用）
             ft.Divider(height=5),
             ft.Text("⏰ 提醒设置", size=14, weight=ft.FontWeight.BOLD),
@@ -7380,94 +7290,45 @@ def main(page: ft.Page):
     title_row = ft.Row(
         [
             # 年份减按钮
-            ft.Container(
-                content=ft.Icon(
-                    ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT,
-                    size=20,
-                    color=ft.Colors.BLACK_87,
-                ),
-                width=40,
-                height=40,
-                border=ft.border.Border(
-                    left=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    top=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    right=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    bottom=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                ),
-                border_radius=20,
-                ink=True,
+            ft.IconButton(
+                icon=ft.Icons.KEYBOARD_DOUBLE_ARROW_LEFT,
+                icon_size=20,
+                icon_color=ft.Colors.GREY_700,
                 on_click=lambda e: change_year(-1),
                 tooltip="上一年",
             ),
             # 月份减按钮
-            ft.Container(
-                content=ft.Icon(
-                    ft.Icons.KEYBOARD_ARROW_LEFT,
-                    size=24,
-                    color=ft.Colors.BLACK_87,
-                ),
-                width=40,
-                height=40,
-                border=ft.border.Border(
-                    left=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    top=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    right=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    bottom=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                ),
-                border_radius=20,
-                ink=True,
+            ft.IconButton(
+                icon=ft.Icons.KEYBOARD_ARROW_LEFT,
+                icon_size=24,
+                icon_color=ft.Colors.GREY_700,
                 on_click=lambda e: change_month(-1),
                 tooltip="上个月",
             ),
             # 月份文本
             ft.Container(
                 content=month_text,
-                padding=10,
-                border_radius=30,
+                padding=10,  # 简单的整数值
             ),
             # 月份加按钮
-            ft.Container(
-                content=ft.Icon(
-                    ft.Icons.KEYBOARD_ARROW_RIGHT,
-                    size=24,
-                    color=ft.Colors.BLACK_87,
-                ),
-                width=40,
-                height=40,
-                border=ft.border.Border(
-                    left=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    top=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    right=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    bottom=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                ),
-                border_radius=20,
-                ink=True,
+            ft.IconButton(
+                icon=ft.Icons.KEYBOARD_ARROW_RIGHT,
+                icon_size=24,
+                icon_color=ft.Colors.GREY_700,
                 on_click=lambda e: change_month(1),
                 tooltip="下个月",
             ),
             # 年份加按钮
-            ft.Container(
-                content=ft.Icon(
-                    ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT,
-                    size=20,
-                    color=ft.Colors.BLACK_87,
-                ),
-                width=40,
-                height=40,
-                border=ft.border.Border(
-                    left=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    top=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    right=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                    bottom=ft.border.BorderSide(1, ft.Colors.BLACK_26),
-                ),
-                border_radius=20,
-                ink=True,
+            ft.IconButton(
+                icon=ft.Icons.KEYBOARD_DOUBLE_ARROW_RIGHT,
+                icon_size=20,
+                icon_color=ft.Colors.GREY_700,
                 on_click=lambda e: change_year(1),
                 tooltip="下一年",
             ),
         ],
         alignment=ft.MainAxisAlignment.CENTER,
-        spacing=8,  # 减小间距，让按钮更紧凑
+        spacing=8,
     )
 
     # 表格
@@ -8598,53 +8459,81 @@ def main(page: ft.Page):
             expand=True,  # 占据剩余空间
         ),
     ], spacing=0, expand=True)
-    
-    # 在变量声明部分添加
-    bottom_info_text = ft.Text(value="✅ 准备就绪", size=12, color=ft.Colors.GREY_600, expand=True)
-    
 
-    
-    # ========== 设置底部按钮 ==========
-    page.bottom_appbar = ft.BottomAppBar(
-        content=ft.Column([
-            # 第一行：圆形返回按钮（靠右对齐，与添加按钮对齐）
-            ft.Container(
-                content=ft.Row([
-                    ft.Container(expand=True),  # 左侧空白，让按钮靠右
-                    today_circle_button,
-                ]),
-                height=70,  # 固定高度，即使按钮隐藏也保留空间
-            ),
-            # 第二行：信息文字和添加按钮
-            ft.Row([
-                ft.Container(
-                    content=bottom_info_text,
-                    expand=True,
-                    padding=5,
+    # 创建返回今天按钮
+    today_circle_button = ft.Container(
+        content=ft.Column(
+            [
+                ft.Text(
+                    str(datetime.now().day),
+                    size=18,
+                    #weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.BLUE_700,
+                    text_align="center",
                 ),
-                ft.Container(
-                    content=ft.Icon(ft.Icons.ADD, size=28, color=ft.Colors.WHITE),
-                    bgcolor=ft.Colors.BLUE_700,
-                    border_radius=30,
-                    padding=12,
-                    ink=True,
-                    on_click=lambda e: open_add_dialog(is_edit=False),
-                    shadow=ft.BoxShadow(
-                        spread_radius=1,
-                        blur_radius=5,
-                        color=ft.Colors.BLUE_300,
-                    ),
-                ),
-            ], spacing=0, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        ], spacing=0),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,  # 垂直居中
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,  # 水平居中
+        ),
+        width=50,
+        height=50,
         bgcolor=ft.Colors.WHITE,
-        height=145,  # 固定高度
+        border_radius=25,
+        ink=True,
+        visible=False,
+        on_click=lambda e: go_to_today(),
+        tooltip=f"回到今天 ({datetime.now().month}月{datetime.now().day}日)",
+        shadow=ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=8,
+            color=ft.Colors.BLACK12,
+            offset=ft.Offset(0, 2),
+        ),
     )
-    
 
-    # ============================================================
-    # ========== 添加页面内容 ==========
-    page.add(main_content)
+    # 创建添加事件按钮
+    floating_add_button = ft.Container(
+        content=ft.Icon(ft.Icons.ADD, size=28, color=ft.Colors.WHITE),
+        bgcolor=ft.Colors.BLUE_700,
+        border_radius=30,
+        padding=14,
+        ink=True,
+        on_click=lambda e: open_add_dialog(is_edit=False),
+        tooltip="添加事件",
+        shadow=ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=10,
+            color=ft.Colors.BLACK26,
+            offset=ft.Offset(0, 2),
+        ),
+    )
+
+    # 使用 Stack 布局，返回按钮在添加按钮上方
+    # 悬浮按钮组
+    floating_buttons = ft.Column(
+        [
+            today_circle_button,
+            floating_add_button,
+        ],
+        spacing=12,  # 按钮间距
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    )
+
+    # Stack 布局
+    main_stack = ft.Stack(
+        [
+            main_content,
+            ft.Container(
+                content=floating_buttons,
+                right=20,
+                bottom=20,
+            ),
+        ],
+        expand=True,
+    )
+
+    # 添加到页面
+    page.add(main_stack)
 
     if platform.system() == "Linux":
         # 延迟2秒显示后台通知（避免与启动检查冲突）
