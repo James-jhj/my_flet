@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.29"
-APP_VERSION_CODE = 29
+APP_VERSION = "1.0.30"
+APP_VERSION_CODE = 30
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -3932,6 +3932,7 @@ def main(page: ft.Page):
         refresh_records_list()
         
         accounting_page = ft.Column([
+            ft.Container(height=12),  # 添加顶部空白，避开手机状态栏
             ft.Row([back_btn], alignment=ft.MainAxisAlignment.START),
             ft.Row([ft.Text("记账本", size=20, weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.CENTER)], alignment=ft.MainAxisAlignment.CENTER),
             ft.Divider(),
@@ -9230,7 +9231,7 @@ def main(page: ft.Page):
     playback_buttons = ft.Row([
         ft.TextButton("⏸️ 暂停", on_click=pause_music, tooltip="暂停音乐"),
         ft.TextButton("⏹️ 停止", on_click=lambda e: stop_music(), tooltip="停止音乐"),
-    ], spacing=2, visible=False)  # 初始隐藏
+    ], spacing=0, visible=False)  # 初始隐藏
 
     # 创建导入导出按钮（始终显示）
     import_export_buttons = ft.Row([
@@ -9238,7 +9239,7 @@ def main(page: ft.Page):
         ft.TextButton("📤 导出", on_click=export_events_wrapper, tooltip="导出事件到Excel"),
         ft.TextButton("💰 记账", on_click=lambda e: show_accounting_page(page), tooltip="记账本"),
         #ft.TextButton("🔔 通知", on_click=test_notification)
-    ], spacing=2)
+    ], spacing=0)
 
 
     # 创建音乐播放相关内容的容器
@@ -9289,7 +9290,7 @@ def main(page: ft.Page):
                 ft.Row([
                     playback_buttons,
                     import_export_buttons,
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=2),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=0),
 
                 ft.Divider(),
                 
@@ -9517,7 +9518,8 @@ def main(page: ft.Page):
     page.on_close = on_page_close
     
     async def update_all():
-        global last_check_date, reminder_flags, current_year, current_month, selected_date, current_date, current_view  # 添加需要修改的全局变量
+        #global last_check_date, reminder_flags, current_year, current_month, selected_date, current_date, current_view  # 添加需要修改的全局变量
+        global last_check_date, reminder_flags, current_year, current_month, selected_date, current_date, current_view, three_days_events, sent_notifications
         
         while True:
             try:
@@ -9589,6 +9591,21 @@ def main(page: ft.Page):
                     #if current_view == "today":
                         #current_view = "all"
                         #print(f"[跨天检测] 今日事件视图已过期，切换到全部事件视图")
+
+
+                    # ========== 5. 关键：重新计算 three_days_events ==========
+                    three_days_events = []
+                    for evt in events.values():
+                        if evt.event_type == "daily" or evt.event_type == "weekly":
+                            continue
+                        month, day, year, base_year, days_until = evt.get_next_date_info()
+                        if evt.repeat_type == "once" and (evt.completed or days_until < 0):
+                            continue
+                        if 0 < days_until <= 3:
+                            three_days_events.append((evt, days_until))
+                    
+                    # ========== 6. 更新顶部日期文本 ==========
+                    update_date_text_with_events(current_date_today, three_days_events)
 
                     determine_startup_view()
                     
