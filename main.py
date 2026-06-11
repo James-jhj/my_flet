@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.30"
-APP_VERSION_CODE = 30
+APP_VERSION = "1.0.31"
+APP_VERSION_CODE = 31
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -3926,6 +3926,10 @@ def main(page: ft.Page):
             floating_add_button.on_click = original_floating_add_click
             page.clean()
             page.add(main_stack) # 重新添加主界面（包含悬浮按钮）
+
+            # ========== 刷新音乐播放信息，重新启动滚动 ==========
+            update_current_playing_info()
+
             page.update()
         
         refresh_summary()
@@ -4405,6 +4409,7 @@ def main(page: ft.Page):
         global current_playing_event_id, current_music_state
         
         today = datetime.now().date()
+        now = datetime.now()
         month, day, year, base_year, days_until = event.get_next_date_info()
 
         # ========== 统一背景色和状态文字颜色 ==========
@@ -4413,61 +4418,138 @@ def main(page: ft.Page):
         status_color = ft.Colors.GREY_600
         status_text = ""
         
-        # ========== 确定状态文本和背景色 ==========
-        if is_filter_mode:
-            # 筛选模式下：根据事件日期与今天的关系判断
-            if month == today.month and day == today.day:
+        # ========== 每天事件特殊处理（放在最前面） ==========
+        if event.event_type == "daily":
+            # 每天事件：计算距离下一个提醒时间的倒计时
+            if event.reminders:
+                now_time = now.strftime("%H:%M")
+                next_reminder_time = None
+                is_today_reminder = False
+                
+                # 找出下一个提醒时间
+                for reminder in event.reminders:
+                    if reminder.get("enabled"):
+                        reminder_time = reminder.get("time", "")
+                        if reminder_time:
+                            if reminder_time > now_time:
+                                # 今天的提醒还没到
+                                next_reminder_time = reminder_time
+                                is_today_reminder = True
+                                break
+                            elif not next_reminder_time:
+                                # 记录第一个提醒时间（用于明天）
+                                next_reminder_time = reminder_time
+                
+                if next_reminder_time:
+                    if is_today_reminder:
+                        # 计算今天的时间差
+                        reminder_hour, reminder_minute = map(int, next_reminder_time.split(":"))
+                        reminder_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
+                        time_diff = reminder_datetime - now
+                        
+                        if time_diff.total_seconds() > 0:
+                            hours = int(time_diff.total_seconds() // 3600)
+                            minutes = int((time_diff.total_seconds() % 3600) // 60)
+                            if hours > 0:
+                                if minutes > 0:
+                                    status_text = f"{next_reminder_time} ({hours}小时{minutes}分后)"
+                                else:
+                                    status_text = f"{next_reminder_time} ({hours}小时后)"
+                            else:
+                                status_text = f"{next_reminder_time} ({minutes}分钟后)"
+                            status_color = ft.Colors.BLUE_700
+                        else:
+                            status_text = f"{next_reminder_time} (已过)"
+                            status_color = ft.Colors.GREY_500
+                    else:
+                        # 明天的提醒
+                        status_text = f"明天 {next_reminder_time}"
+                        status_color = ft.Colors.ORANGE_700
+                else:
+                    status_text = "每天"
+                    status_color = ft.Colors.PURPLE_700
+            else:
+                status_text = "每天"
+                status_color = ft.Colors.PURPLE_700
+        
+        # ========== 其他事件类型 ==========
+        elif event.event_type == "weekly":
+            if days_until == 0:
                 status_text = "今天"
                 status_color = ft.Colors.RED_700
-                #bg_color = ft.Colors.RED_50
+            elif days_until == 1:
+                status_text = "明天"
+                status_color = ft.Colors.ORANGE_700
+            else:
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.BLUE_700
+        
+        elif event.repeat_type == "once":
+            if event.completed:
+                status_text = "已完成"
+                status_color = ft.Colors.GREY_500
             elif days_until < 0:
                 status_text = "已过期"
                 status_color = ft.Colors.GREY_500
-                #bg_color = ft.Colors.GREY_100
+            elif days_until == 0:
+                status_text = "今天"
+                status_color = ft.Colors.RED_700
             else:
-                status_text = f"还剩 {days_until} 天"
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.ORANGE_700
+        
+        elif event.event_type == "monthly":
+            if days_until == 0:
+                status_text = "今天"
+                status_color = ft.Colors.RED_700
+            elif days_until == 1:
+                status_text = "明天"
+                status_color = ft.Colors.ORANGE_700
+            else:
+                status_text = f"{days_until}天后"
                 status_color = ft.Colors.BLUE_700
-                #bg_color = ft.Colors.WHITE
-        else:
-            # 正常视图下的状态判断
-            if event.event_type == "daily":
-                status_text = "每天"
-                status_color = ft.Colors.PURPLE_700
-                #bg_color = ft.Colors.PURPLE_50
-            elif event.event_type == "weekly":
-                status_text = "每周"
-                status_color = ft.Colors.TEAL_700
-                #bg_color = ft.Colors.TEAL_50
-            elif event.repeat_type == "once":
-                if event.completed:
-                    status_text = "已完成"
-                    status_color = ft.Colors.GREY_500
-                    #bg_color = ft.Colors.GREY_100
-                elif days_until < 0:
-                    status_text = "已过期"
-                    status_color = ft.Colors.GREY_500
-                    #bg_color = ft.Colors.GREY_100
-                elif days_until == 0:
-                    status_text = "今天"
-                    status_color = ft.Colors.RED_700
-                    #bg_color = ft.Colors.RED_50
-                else:
-                    status_text = f"还剩 {days_until} 天"
-                    status_color = ft.Colors.ORANGE_700
-                    #bg_color = ft.Colors.ORANGE_50
+        
+        elif event.event_type == "birthday":
+            if days_until == 0:
+                status_text = "今天"
+                status_color = ft.Colors.RED_700
+            elif days_until <= 7:
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.ORANGE_700
             else:
-                if days_until == 0:
-                    status_text = "今天"
-                    status_color = ft.Colors.RED_700
-                    #bg_color = ft.Colors.RED_50
-                elif days_until <= 7:
-                    status_text = f"还剩 {days_until} 天"
-                    status_color = ft.Colors.ORANGE_700
-                    #bg_color = ft.Colors.ORANGE_50
-                else:
-                    status_text = f"还剩 {days_until} 天"
-                    status_color = ft.Colors.BLUE_700
-                    #bg_color = ft.Colors.WHITE
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.BLUE_700
+        
+        elif event.event_type == "event":
+            if days_until == 0:
+                status_text = "今天"
+                status_color = ft.Colors.RED_700
+            elif days_until <= 7:
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.ORANGE_700
+            else:
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.BLUE_700
+        
+        else:
+            # 筛选模式或其他
+            if days_until == 0:
+                status_text = "今天"
+                status_color = ft.Colors.RED_700
+            else:
+                status_text = f"{days_until}天后"
+                status_color = ft.Colors.BLUE_700
+        
+        # 创建状态容器
+        if status_text:
+            status_container = ft.Container(
+                content=ft.Text(status_text, size=12, weight=ft.FontWeight.BOLD, color=status_color),
+                padding=5,
+                bgcolor=ft.Colors.WHITE,
+                border_radius=5,
+            )
+        else:
+            status_container = ft.Container()
         
         # ========== 获取事件图标和显示日期 ==========
         calendar_icon = get_event_icon(event)
@@ -4556,10 +4638,7 @@ def main(page: ft.Page):
                         ft.Text(age_text, size=11, color=ft.Colors.ORANGE_700) if age_text else ft.Container(),
                         music_info_row,
                     ], expand=True),
-                    ft.Container(
-                        content=ft.Text(status_text, size=12, weight=ft.FontWeight.BOLD, color=status_color),
-                        padding=5, bgcolor=ft.Colors.WHITE, border_radius=5,
-                    ),
+                    status_container,
                 ]),
                 ft.Row([
                     ft.Row([loop_checkbox, play_button], spacing=5),
