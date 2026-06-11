@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.27"
-APP_VERSION_CODE = 27
+APP_VERSION = "1.0.28"
+APP_VERSION_CODE = 28
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -1201,34 +1201,88 @@ class LyricsDownloader:
                     browser = p.chromium.launch(headless=True)
                     print("⚠️ 使用内置 Chromium")
                 
-                context = browser.new_context()
-                page = context.new_page()
+                page = browser.new_page()
                 
+                # 监听网络请求（捕获MP3请求）
+                def handle_request(request):
+                    nonlocal mp3_url
+                    # 检查是否为MP3请求（特别是来自 kuwo.cn 的）
+                    if '.mp3' in request.url and ('kuwo' in request.url.lower() or 'music' in request.url.lower()):
+                        mp3_url = re.sub(r'\?.*$', '', request.url)
+                        print(f"✅ 拦截到MP3请求: {mp3_url[:80]}...")
+                
+                # 监听响应（备用方案）
                 def handle_response(response):
                     nonlocal mp3_url
-                    if '/api/play-url' in response.url:
-                        try:
-                            data = response.json()
-                            if data.get('code') == 1:
-                                url_raw = data.get('data', {}).get('url', '')
-                                if url_raw:
-                                    mp3_url = re.sub(r'\?.*$', '', url_raw)
-                                    print("✓ 捕获到MP3链接")
-                        except Exception as e:
-                            print(f"解析响应失败: {e}")
+                    if '.mp3' in response.url and ('kuwo' in response.url.lower() or 'music' in response.url.lower()):
+                        mp3_url = re.sub(r'\?.*$', '', response.url)
+                        print(f"✅ 从响应中捕获到MP3链接: {mp3_url[:80]}...")
                 
+                # 绑定事件
+                page.on('request', handle_request)
                 page.on('response', handle_response)
-                page.goto(song_url)
                 
-                for _ in range(30):
+                # 访问歌曲页面
+                print(f"正在访问: {song_url}")
+                page.goto(song_url, wait_until="domcontentloaded", timeout=15000)
+                
+                # 查找并点击下载按钮（使用多种方式）
+                try:
+                    # 方式1：通过文本查找
+                    download_btn = page.locator("text=下载歌曲").first
+                    if download_btn and download_btn.is_visible():
+                        download_btn.click()
+                        print("已点击「下载歌曲」按钮")
+                except:
+                    try:
+                        # 方式2：通过CSS选择器查找
+                        download_btn = page.locator("a:has-text('下载歌曲')").first
+                        if download_btn and download_btn.is_visible():
+                            download_btn.click()
+                            print("已通过CSS选择器点击下载按钮")
+                    except:
+                        print("未找到下载按钮，尝试其他方式...")
+                        # 方式3：尝试点击播放按钮触发
+                        try:
+                            play_btn = page.locator("audio").first
+                            if play_btn:
+                                play_btn.click()
+                                print("已点击播放按钮")
+                        except:
+                            pass
+                
+                # 等待MP3请求（最多等待30秒）
+                print("等待MP3链接...")
+                for _ in range(60):
                     if mp3_url:
                         break
                     page.wait_for_timeout(500)
                 
+                # 如果还没有找到，尝试刷新页面
+                if not mp3_url:
+                    print("未拦截到请求，尝试刷新页面...")
+                    page.reload(wait_until="domcontentloaded")
+                    page.wait_for_timeout(3000)
+                    
+                    # 再次尝试点击下载按钮
+                    try:
+                        page.locator("text=下载歌曲").first.click()
+                        page.wait_for_timeout(3000)
+                    except:
+                        pass
+                    
+                    # 再次等待
+                    for _ in range(60):
+                        if mp3_url:
+                            break
+                        page.wait_for_timeout(500)
+                
                 browser.close()
                 
         except Exception as e:
-            print(f"playwright获取链接失败: {e}")
+            print(f"浏览器获取失败: {e}")
+            import traceback
+            traceback.print_exc()
         
         return mp3_url
 
@@ -2485,6 +2539,10 @@ def main(page: ft.Page):
 
         #show_snack_bar(f"播放音乐: {sound_file}")
         current_music_file = sound_file
+
+        # 记录当前播放的事件ID（可能为None）
+        current_playing_event_id = event_id
+        current_music_state = "playing"
         
         progress_slider.value = 0
         progress_text.value = f"0:00 / {format_time(current_duration)}"
@@ -2609,6 +2667,11 @@ def main(page: ft.Page):
                 print("[播放状态] 音乐播放完成")
                 is_playing = False
                 current_audio = None
+                current_music_state = "stopped"
+
+                # 如果是试听模式，清除事件ID
+                if current_playing_event_id is None or current_playing_event_id not in events:
+                    current_playing_event_id = None
 
                 # 重置进度条
                 progress_slider.value = 0
@@ -2629,6 +2692,15 @@ def main(page: ft.Page):
                 # ========== 关闭全屏歌词（如果打开） ==========
                 if lyrics_fullscreen_container and lyrics_fullscreen_container in page.overlay:
                     close_fullscreen_lyrics()
+
+                # ========== 关键：调用更新UI函数，隐藏音乐区域 ==========
+                update_current_playing_info()
+                
+                # 取消通知
+                cancel_notification(MUSIC_NOTIFICATION_ID)
+                
+                # 刷新页面
+                page.update()
 
                 # ========== 动态检查循环状态 ==========
                 should_loop = event_loop_states.get(original_event_id, False)
@@ -5672,7 +5744,7 @@ def main(page: ft.Page):
         
         # 试听
         def test_play(e):
-            global music_section_container,playback_buttons
+            global music_section_container,playback_buttons, current_music_state, current_playing_event_id, current_music_file
             file_path = music_field.value.strip()
 
             if not file_path:
@@ -5714,6 +5786,18 @@ def main(page: ft.Page):
             if playback_buttons:
                 playback_buttons.visible = True
                 playback_buttons.update()
+
+            # 设置状态
+            current_music_state = "playing"
+            current_music_file = file_path
+            if test_event_id:
+                current_playing_event_id = test_event_id
+            else:
+                current_playing_event_id = None
+
+            # 更新界面
+            update_current_playing_info()
+            page.update()
 
         
         # 定义所有控件
@@ -7411,20 +7495,13 @@ def main(page: ft.Page):
         # 更新月份文本显示
         month_text.value = f"{current_year}年{current_month}月"
         
-        # ========== 检查当前月份是否是今天所在的月份 ==========
-        today = datetime.now()
-        is_current_month = (current_year == today.year and current_month == today.month)
+        # ========== 检查当前选中的日期是否是今天 ==========
+        today = datetime.now().date()
+        is_selected_today = (selected_date == today) if selected_date else False
         
-        # 根据是否是当前月份显示/隐藏圆形按钮
-        today_circle_button.visible = not is_current_month
-        
-        # 更新按钮上的日期数字（保持最新）
-        #today_circle_button.content.controls[0].value = str(today.day)
-        #today_circle_button.tooltip = f"回到今天 ({today.month}月{today.day}日)"
-        # 更新按钮上的日期数字（直接修改 content 的值）
-        #today_circle_button.content.value = str(today.day)  # 因为 content 现在是 Text
-        #today_circle_button.tooltip = f"回到今天 ({today.month}月{today.day}日)"
-        #today_circle_button.update()
+        # 只要选中的日期不是今天，就显示返回按钮
+        # 如果没有选中任何日期，也不显示
+        today_circle_button.visible = selected_date is not None and not is_selected_today
 
         # ========== 更新按钮上的日期数字（关键修复） ==========
         # 更新按钮上的日期数字
@@ -8211,110 +8288,69 @@ def main(page: ft.Page):
         
         print(f"[update_current_playing_info] 被调用 - event_id: {current_playing_event_id}, state: {current_music_state}")
         
-        # ========== 先处理停止状态 ==========
-        if current_music_state == "stopped":
-            full_text = "🎵 未播放"
-            marquee_text.stop()
-            marquee_text.update_text(full_text)
-            marquee_text.color = ft.Colors.GREY_600
-            if marquee_text._initialized:
-                marquee_text._draw_frame()
-            # 隐藏整个音乐区域（包括分割线）
+        # 如果有音乐正在播放（无论是否有事件），都显示音乐区域
+        if current_music_state in ["playing", "paused"]:
+            # 显示音乐区域
             if music_section_container:
-                music_section_container.visible = False
+                music_section_container.visible = True
                 music_section_container.update()
-            # 隐藏播放控制按钮
             if playback_buttons:
-                playback_buttons.visible = False
+                playback_buttons.visible = True
                 playback_buttons.update()
-            print(f"[update_current_playing_info] 设置为未播放状态，隐藏音乐区域")
-            return
-        
-        # 处理播放和暂停状态（必须有事件ID）
-        if not current_playing_event_id or current_playing_event_id not in events:
-            print(f"[update_current_playing_info] 没有找到事件，但状态是 {current_music_state}，显示未播放")
-            marquee_text.update_text("🎵 未播放")
-            marquee_text.color = ft.Colors.GREY_600
-            marquee_text.stop()
-            if marquee_text._initialized:
-                marquee_text._draw_frame()
-            # 隐藏整个音乐区域（包括分割线）
-            if music_section_container:
-                music_section_container.visible = False
-                music_section_container.update()
-            # 隐藏播放控制按钮
-            if playback_buttons:
-                playback_buttons.visible = False
-                playback_buttons.update()
-            return
-        
-        event = events[current_playing_event_id]
-        print(f"[update_current_playing_info] 找到事件: {event.name}")
-        
-        if not event.sound_file or not os.path.exists(event.sound_file):
-            print(f"[update_current_playing_info] 事件没有音乐文件")
-            marquee_text.update_text("🎵 未播放")
-            marquee_text.color = ft.Colors.GREY_600
-            marquee_text.stop()
-            if marquee_text._initialized:
-                marquee_text._draw_frame()
-            # 隐藏整个音乐区域（包括分割线）
-            if music_section_container:
-                music_section_container.visible = False
-                music_section_container.update()
-            # 隐藏播放控制按钮
-            if playback_buttons:
-                playback_buttons.visible = False
-                playback_buttons.update()
-            return
-        
-        # 有音乐播放，显示整个音乐区域（包括分割线）
-        if music_section_container:
-            music_section_container.visible = True
-            music_section_container.update()
-
-        # 显示播放控制按钮
-        if playback_buttons:
-            playback_buttons.visible = True
-            playback_buttons.update()
             
-        music_name = get_full_music_name(event.sound_file)
-        
-        if event.event_type == "birthday":
-            event_icon = "🎉"
-            event_type_text = "生日"
+            # 获取音乐名称
+            if current_music_file and os.path.exists(current_music_file):
+                music_name = get_full_music_name(current_music_file)
+            else:
+                music_name = "未知音乐"
+            
+            # 判断是否是试听模式（没有事件ID或事件不存在）
+            is_preview = (current_playing_event_id is None or 
+                        current_playing_event_id not in events)
+            
+            if is_preview:
+                # 试听模式
+                if current_music_state == "playing":
+                    full_text = f"🎵 试听中: {music_name}"
+                    marquee_text.color = ft.Colors.BLUE_700
+                    marquee_text.update_text(full_text)
+                    marquee_text.start()
+                else:
+                    full_text = f"⏸️ 已暂停: {music_name}"
+                    marquee_text.color = ft.Colors.ORANGE_700
+                    marquee_text.update_text(full_text)
+                    marquee_text.stop()
+            else:
+                # 正式事件
+                event = events[current_playing_event_id]
+                if event.event_type == "birthday":
+                    event_icon = "🎉"
+                    event_type_text = "生日"
+                else:
+                    event_icon = "📅"
+                    event_type_text = "事件"
+                
+                if current_music_state == "playing":
+                    full_text = f"播放中: {event_icon}【{event.name}】- {event_type_text} : {music_name}"
+                    marquee_text.color = ft.Colors.BLUE_700
+                    marquee_text.update_text(full_text)
+                    marquee_text.start()
+                else:
+                    full_text = f"已暂停: {music_name}"
+                    marquee_text.color = ft.Colors.ORANGE_700
+                    marquee_text.update_text(full_text)
+                    marquee_text.stop()
         else:
-            event_icon = "📅"
-            event_type_text = "事件"
-        
-        if current_music_state == "playing":
-            full_text = f"播放中: {event_icon}【{event.name}】- {event_type_text} : {music_name}"
-            marquee_text.color = ft.Colors.BLUE_700
-            marquee_text.update_text(full_text)
-            # 使用 page.run_task 来启动滚动，而不是直接调用
-            try:
-                marquee_text.start()
-            except Exception as e:
-                print(f"启动滚动失败: {e}")
-            print(f"[update_current_playing_info] 设置为播放状态（蓝色）并启动滚动")
-        elif current_music_state == "paused":
-            full_text = f"已暂停: {music_name}"
-            marquee_text.color = ft.Colors.ORANGE_700
-            marquee_text.update_text(full_text)
-            try:
-                marquee_text.stop()
-            except Exception as e:
-                print(f"停止滚动失败: {e}")
-            if marquee_text._initialized:
-                marquee_text._draw_frame()
-            print(f"[update_current_playing_info] 设置为暂停状态（橙色），停止滚动")
-        else:
+            # 停止状态，隐藏音乐区域
+            if music_section_container:
+                music_section_container.visible = False
+                music_section_container.update()
+            if playback_buttons:
+                playback_buttons.visible = False
+                playback_buttons.update()
             marquee_text.update_text("🎵 未播放")
             marquee_text.color = ft.Colors.GREY_600
-            try:
-                marquee_text.stop()
-            except Exception as e:
-                print(f"停止滚动失败: {e}")
+            marquee_text.stop()
             if marquee_text._initialized:
                 marquee_text._draw_frame()
         
