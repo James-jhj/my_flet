@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.28"
-APP_VERSION_CODE = 28
+APP_VERSION = "1.0.29"
+APP_VERSION_CODE = 29
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -189,48 +189,6 @@ except ImportError as e:
     ANDROID_NOTIFY_AVAILABLE = False
     print(f"❌ android_notify 导入失败: {e}")
 
-
-# 尝试导入 Android 原生模块
-ANDROID_MODULE_AVAILABLE = False
-try:
-    import android
-    from android import activity
-    from android.os import PowerManager
-    ANDROID_MODULE_AVAILABLE = True
-    print("✅ android 原生模块导入成功")
-except ImportError as e:
-    print(f"❌ android 原生模块导入失败: {e}")
-
-# ========== 3. WakeLock 保活功能（放在这里） ==========
-wake_lock = None
-
-def acquire_wakelock():
-    """获取唤醒锁，防止 CPU 休眠"""
-    global wake_lock
-    try:
-        power_manager = activity.getSystemService(activity.POWER_SERVICE)
-        wake_lock = power_manager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "EventReminder:WakeLock"
-        )
-        wake_lock.acquire()
-        print("[WakeLock] ✅ 已获取，CPU 将保持运行")
-        return wake_lock
-    except Exception as e:
-        print(f"[WakeLock] ❌ 获取失败: {e}")
-        return None
-
-def release_wakelock():
-    """释放唤醒锁"""
-    global wake_lock
-    try:
-        if wake_lock:
-            wake_lock.release()
-            wake_lock = None
-            print("[WakeLock] ✅ 已释放")
-    except Exception as e:
-        print(f"[WakeLock] ❌ 释放失败: {e}")
-
 # ========== 平台检测（放在这里） ==========
 IS_WINDOWS = platform.system() == "Windows"
 
@@ -258,6 +216,52 @@ else:
     except ImportError:
         PYCNM_AVAILABLE = False
         print("警告: pyncm 模块不可用")
+
+
+class Transaction:
+    """记账记录"""
+    def __init__(self, id: str, date: str, type: str, category: str, amount: float, note: str = ""):
+        self.id = id
+        self.date = date  # 格式: YYYY-MM-DD
+        self.type = type  # "income" 或 "expense"
+        self.category = category  # 分类
+        self.amount = amount
+        self.note = note
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "date": self.date,
+            "type": self.type,
+            "category": self.category,
+            "amount": self.amount,
+            "note": self.note,
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            data["id"],
+            data["date"],
+            data["type"],
+            data["category"],
+            data["amount"],
+            data.get("note", ""),
+        )
+""" 
+class BudgetCategory:
+    "预算分类"
+    def __init__(self, name: str, budget: float = 0):
+        self.name = name
+        self.budget = budget
+    
+    def to_dict(self):
+        return {"name": self.name, "budget": self.budget}
+    
+    @classmethod
+    def from_dict(cls, data):
+        return cls(data["name"], data.get("budget", 0))
+"""
 
 class SmoothMarqueeText(ft.Stack):
     """平滑滚动字幕控件 - 修复文本重叠问题"""
@@ -1176,6 +1180,7 @@ class LyricsDownloader:
             return None
     
         mp3_url = None
+    
         try:
             from playwright.sync_api import sync_playwright
             
@@ -1523,8 +1528,10 @@ def main(page: ft.Page):
     global selected_date,three_days_events, date_text,current_view   # 添加 date_text
     global month_text, current_year, current_month, today_circle_button  # 添加 today_circle_button
     global music_control_container, playback_buttons, music_section_container  # 修改这里
-    global sent_notifications,events_list
-    global filter_date   # 添加这行
+    global sent_notifications,events_list,filter_date
+    global transactions  # 添加这行
+    global current_page, floating_add_button  # 添加这行，用于记录当前页面
+
 
     page.window_icon = "icon.png"
     page.title = "事件提醒助手"
@@ -1581,6 +1588,9 @@ def main(page: ft.Page):
     # 初始化 filter_date
     filter_date = None
 
+    # 初始化当前页面
+    current_page = "main"  # "main" 或 "accounting"
+
     #current_display_view = "main"  # main: 全部/今日事件, warning: 预警事件
 
     # 在函数外部定义全局变量
@@ -1635,6 +1645,42 @@ def main(page: ft.Page):
     run_time_text = ft.Text(value="⏱️ 运行时间: 00:00:00", size=12, color=ft.Colors.GREEN_600)  # 新增
     # 当前日期时间显示
     current_datetime_text = ft.Text(value="📅 当前时间：",size=12, color=ft.Colors.BLUE_700)
+
+    # ========== 记账分类定义（放在这里） ==========
+
+    # 初始化记账数据
+    transactions = []
+
+    # 收入分类（预设）
+    INCOME_CATEGORIES = [
+        "工资收入",
+        "奖金收入",
+        "兼职收入",
+        "投资收入",
+        "红包收入",
+        "其他收入",
+    ]
+    
+    # 支出分类（预设）
+    EXPENSE_CATEGORIES = [
+        "餐饮",
+        "水电费",
+        "电话费",
+        "房贷",
+        "车贷",
+        "购物",
+        "娱乐",
+        "交通",
+        "医疗",
+        "教育",
+        "服饰",
+        "美容",
+        "宠物",
+        "社交",
+        "旅游",
+        "其他支出",
+    ]
+
     
     def debug_log(msg):
         """调试日志函数"""
@@ -3044,7 +3090,6 @@ def main(page: ft.Page):
 
         page.update()
     
-
     def show_daily_events():
         """显示每日事件列表"""
         global current_view, events_list
@@ -3189,6 +3234,763 @@ def main(page: ft.Page):
         
         page.update()
     
+    # ===========================  记账功能添加 ===================================
+    def show_accounting_page(page: ft.Page):
+        """显示记账页面（升级版：支持按月查询、编辑、删除）"""
+        global transactions
+        global current_page, floating_add_button, original_floating_add_click
+
+        # 切换到记账页面
+        current_page = "accounting"
+
+        # 保存原来的点击事件，并替换为记账页面的添加菜单
+        original_floating_add_click = floating_add_button.on_click
+        floating_add_button.on_click = lambda e: show_accounting_add_menu()
+
+        # 隐藏主界面的返回今日按钮（如果需要）
+        #today_circle_button.visible = False
+
+        # 当前选中的年月
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        selected_date = datetime.now()
+        
+        # 记录列表容器
+        records_list = ft.Column(spacing=5, scroll=ft.ScrollMode.AUTO, expand=True)
+        
+        # 加载记账数据
+        def load_accounting_data():
+            global transactions
+            try:
+                json_path = get_data_file_path("accounting.json")
+                if os.path.exists(json_path):
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        transactions = [Transaction.from_dict(t) for t in data.get("transactions", [])]
+                else:
+                    # 首次使用，创建空记录
+                    transactions = []
+                    save_accounting_data()
+            except Exception as e:
+                print(f"加载记账数据失败: {e}")
+                transactions = []
+        
+        def save_accounting_data():
+            global transactions
+            try:
+                json_path = get_data_file_path("accounting.json")
+                data = {
+                    "transactions": [t.to_dict() for t in transactions],
+                }
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                print(f"记账数据已保存，共 {len(transactions)} 条记录")
+            except Exception as e:
+                print(f"保存记账数据失败: {e}")
+
+        def delete_transaction(transaction_id, transaction_name):
+            """删除记录（带确认对话框）"""
+            
+            # 找到要删除的记录
+            transaction_to_delete = None
+            for t in transactions:
+                if t.id == transaction_id:
+                    transaction_to_delete = t
+                    break
+            
+            if not transaction_to_delete:
+                show_bottom_message("未找到该记录")
+                return
+            
+            dialog_container = None
+            
+            def close_dialog():
+                nonlocal dialog_container
+                if dialog_container and dialog_container in page.overlay:
+                    page.overlay.remove(dialog_container)
+                    dialog_container = None
+                    page.update()
+            
+            def confirm_delete(e):
+                close_dialog()
+                global transactions
+                transactions = [t for t in transactions if t.id != transaction_id]
+                save_accounting_data()
+                refresh_records_list()
+                refresh_summary()
+                show_bottom_message(f"已删除{transaction_to_delete.category}记录")
+            
+            def cancel_delete(e):
+                close_dialog()
+                show_bottom_message(f"已取消删除")
+                page.update()
+            
+            # 确定显示内容
+            is_income = transaction_to_delete.type == "income"
+            type_text = "收入" if is_income else "支出"
+            amount_text = f"{transaction_to_delete.category} - ¥{abs(transaction_to_delete.amount):,.2f}"
+            
+            # 对话框内容
+            dialog_content = ft.Container(
+                content=ft.Column([
+                    # 顶部图标（带背景圆）
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, size=55, color=ft.Colors.RED_700),
+                        padding=10,
+                        bgcolor=ft.Colors.RED_50,
+                        border_radius=50,
+                    ),
+                    ft.Text("确认删除", size=22, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700, text_align=ft.TextAlign.CENTER),
+                    ft.Divider(height=1, color=ft.Colors.GREY_300),
+                    ft.Text(f"确定要删除这条{type_text}记录吗？", size=14, color=ft.Colors.GREY_700, text_align=ft.TextAlign.CENTER),
+                    ft.Text(amount_text, size=13, color=ft.Colors.BLUE_700, text_align=ft.TextAlign.CENTER),
+                    ft.Text(transaction_to_delete.date, size=12, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
+                    ft.Text("此操作不可撤销！", size=12, color=ft.Colors.RED_500, text_align=ft.TextAlign.CENTER),
+                    ft.Divider(height=1, color=ft.Colors.GREY_300),
+                    # 按钮区域
+                    ft.Row([
+                        ft.ElevatedButton(
+                            "取消", 
+                            on_click=cancel_delete, 
+                            expand=True,
+                            style=ft.ButtonStyle(bgcolor=ft.Colors.GREY_100, color=ft.Colors.GREY_700),
+                        ),
+                        ft.ElevatedButton(
+                            "确认删除", 
+                            on_click=confirm_delete, 
+                            expand=True,
+                            style=ft.ButtonStyle(bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE),
+                        ),
+                    ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
+                ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                width=320,
+                padding=20,
+                bgcolor=ft.Colors.WHITE,
+                border_radius=16,
+            )
+            
+            dialog_container = ft.Container(
+                content=ft.Column([
+                    ft.Container(expand=True),  # 上方弹性空间
+                    ft.Row([
+                        ft.Container(expand=True),  # 左侧弹性空间
+                        dialog_content,
+                        ft.Container(expand=True),  # 右侧弹性空间
+                    ]),
+                    ft.Container(expand=True),  # 下方弹性空间
+                ]),
+                expand=True,
+                bgcolor=ft.Colors.BLACK26,
+                on_click=close_dialog,
+            )
+            
+            page.overlay.append(dialog_container)
+            page.update()
+        
+        def edit_transaction(transaction):
+            """编辑记录（与添加事件界面风格一致）"""
+            edit_dialog_container = None
+            
+            def close_edit_dialog():
+                nonlocal edit_dialog_container
+                if edit_dialog_container and edit_dialog_container in page.overlay:
+                    page.overlay.remove(edit_dialog_container)
+                    edit_dialog_container = None
+                    page.update()
+            
+            categories = INCOME_CATEGORIES if transaction.type == "income" else EXPENSE_CATEGORIES
+            
+            date_field = ft.TextField(
+                label="日期",
+                value=transaction.date,
+                read_only=True,
+                expand=True,
+            )
+            
+            category_field = ft.Dropdown(
+                label="分类",
+                options=[ft.dropdown.Option(c, c) for c in categories],
+                expand=True,
+                value=transaction.category,
+            )
+            
+            amount_field = ft.TextField(
+                label="金额",
+                value=str(abs(transaction.amount)),
+                keyboard_type=ft.KeyboardType.NUMBER,
+                expand=True,
+            )
+            
+            note_field = ft.TextField(
+                label="备注",
+                value=transaction.note,
+                expand=True,
+                multiline=True,
+                max_lines=3,
+            )
+            
+            # ========== 修复日期选择器 ==========
+            # 解析当前日期，用于初始化日期选择器
+            current_date_value = None
+            try:
+                if transaction.date:
+                    current_date_value = datetime.strptime(transaction.date, "%Y-%m-%d")
+            except:
+                pass
+            
+            date_picker = ft.DatePicker(
+                first_date=datetime(2020, 1, 1),
+                last_date=datetime(2030, 12, 31),
+                value=current_date_value,  # 设置初始值为当前记录的日期
+                on_change=lambda e: on_date_selected(e),
+            )
+
+            def on_date_selected(e):
+                if date_picker.value:
+                    # 添加8小时时区转换，解决手机端日期少一天的问题
+                    #local_date = date_picker.value + timedelta(hours=8)
+                    local_date = date_picker.value + timedelta(days=1)
+                    date_field.value = local_date.strftime("%Y-%m-%d")
+                    date_field.update()
+                    page.update()
+                    
+            date_field.on_click = lambda e: page.show_dialog(date_picker)
+            
+            def save_edit(e):
+                try:
+                    amount = float(amount_field.value)
+                    if amount <= 0:
+                        show_bottom_message("金额必须大于0", is_error=True)
+                        return
+                    transaction.date = date_field.value
+                    transaction.category = category_field.value
+                    transaction.amount = amount
+                    transaction.note = note_field.value
+                    save_accounting_data()
+                    refresh_records_list()
+                    refresh_summary()
+                    show_bottom_message("已更新记录")
+                    close_edit_dialog()
+                except ValueError:
+                    show_bottom_message("请输入有效的金额", is_error=True)
+            
+            # 顶部按钮栏（与添加事件一致）
+            top_bar = ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.CLOSE,
+                    icon_size=24,
+                    icon_color=ft.Colors.RED_700,
+                    tooltip="取消",
+                    on_click=lambda e: close_edit_dialog(),
+                ),
+                ft.Text("编辑记录", size=18, weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.CENTER),
+                ft.IconButton(
+                    icon=ft.Icons.CHECK,
+                    icon_size=24,
+                    icon_color=ft.Colors.GREEN_700,
+                    tooltip="保存",
+                    on_click=save_edit,
+                ),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            
+            # 可滚动的内容区域
+            scrollable_content = ft.Column([
+                ft.Container(height=1),
+                date_field,
+                category_field,
+                amount_field,
+                note_field,
+            ], spacing=15, scroll=ft.ScrollMode.AUTO)
+            
+            # 整体布局（带边框和阴影）
+            dialog_content = ft.Column([
+                top_bar,
+                ft.Divider(height=5),
+                ft.Container(
+                    content=scrollable_content,
+                    expand=True,
+                ),
+            ], spacing=10, height=420)
+            
+            edit_dialog_container = ft.Container(
+                content=ft.Container(
+                    content=dialog_content,
+                    bgcolor=ft.Colors.WHITE,
+                    padding=20,
+                    border_radius=12,
+                    #border=ft.border.all(1, ft.Colors.BLUE_200),
+                    shadow=ft.BoxShadow(
+                        spread_radius=1,
+                        blur_radius=15,
+                        color=ft.Colors.BLACK12,
+                    ),
+                    expand=True,
+                ),
+                left=20,
+                top=50,
+                right=20,
+                bottom=50,
+            )
+            
+            page.overlay.append(edit_dialog_container)
+            page.update()
+
+        def refresh_summary():
+            """刷新统计卡片"""
+            summary_container.controls.clear()
+            
+            # 计算当月收支
+            month_str = f"{current_year}-{current_month:02d}"
+            month_income = sum(t.amount for t in transactions if t.type == "income" and t.date.startswith(month_str))
+            month_expense = sum(t.amount for t in transactions if t.type == "expense" and t.date.startswith(month_str))
+            month_balance = month_income - month_expense
+            
+            # 计算总收支
+            total_income = sum(t.amount for t in transactions if t.type == "income")
+            total_expense = sum(t.amount for t in transactions if t.type == "expense")
+            total_balance = total_income - total_expense
+            
+            summary_container.controls.append(
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(f"📅 {current_year}年{current_month}月", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Row([
+                            ft.Column([
+                                ft.Text("收入", size=12, color=ft.Colors.GREY_600),
+                                ft.Text(f"¥ {month_income:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_700),
+                            ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                            ft.Column([
+                                ft.Text("支出", size=12, color=ft.Colors.GREY_600),
+                                ft.Text(f"¥ {month_expense:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700),
+                            ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                            ft.Column([
+                                ft.Text("结余", size=12, color=ft.Colors.GREY_600),
+                                ft.Text(f"¥ {month_balance:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
+                            ], expand=True, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                        ], spacing=5),
+                        ft.Divider(height=1),
+                        ft.Row([
+                            ft.Text(f"累计结余: ¥ {total_balance:,.2f}", size=12, color=ft.Colors.GREY_600),
+                        ], alignment=ft.MainAxisAlignment.END),
+                    ], spacing=8),
+                    padding=12,
+                    bgcolor=ft.Colors.GREY_50,
+                    border_radius=10,
+                )
+            )
+            page.update()
+        
+        def refresh_records_list():
+            """刷新记录列表"""
+            records_list.controls.clear()
+            
+            # 筛选当月记录
+            month_str = f"{current_year}-{current_month:02d}"
+            month_records = [t for t in transactions if t.date.startswith(month_str)]
+            month_records.sort(key=lambda x: x.date, reverse=True)
+            
+            if not month_records:
+                records_list.controls.append(
+                    ft.Container(
+                        content=ft.Text("暂无记录，点击 + 添加", size=14, color=ft.Colors.GREY_500),
+                        padding=20,
+                        #alignment="center",
+                    )
+                )
+                page.update()
+                return
+            
+            for t in month_records:
+                is_income = t.type == "income"
+                amount_color = ft.Colors.GREEN_700 if is_income else ft.Colors.RED_700
+                amount_prefix = "+" if is_income else "-"
+                
+                # 记录卡片
+                record_card = ft.Container(
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Row([
+                                ft.Icon(ft.Icons.ARROW_UPWARD if is_income else ft.Icons.ARROW_DOWNWARD, 
+                                    size=16, color=amount_color),
+                                ft.Text(t.category, size=14, weight=ft.FontWeight.BOLD),
+                            ], spacing=5),
+                            ft.Text(t.date, size=11, color=ft.Colors.GREY_500),
+                            ft.Text(t.note, size=11, color=ft.Colors.GREY_500) if t.note else ft.Container(),
+                        ], expand=True),
+                        ft.Row([
+                            ft.Text(f"{amount_prefix}¥ {abs(t.amount):,.2f}", size=14, weight=ft.FontWeight.BOLD, color=amount_color),
+                            ft.IconButton(ft.Icons.EDIT, icon_size=18, icon_color=ft.Colors.BLUE_400, 
+                                        on_click=lambda e, tr=t: edit_transaction(tr)),
+                            # 修改为（传入记录对象）
+                            ft.IconButton(ft.Icons.DELETE, icon_size=18, icon_color=ft.Colors.RED_400,
+                                        on_click=lambda e, tr=t: delete_transaction(tr.id, tr.category)),
+                        ], spacing=0),
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    padding=10,
+                    border=ft.border.Border(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200)),
+                    ink=True,
+                )
+                records_list.controls.append(record_card)
+            
+            page.update()
+        
+        def change_month_acct(delta):
+            """切换月份"""
+            nonlocal current_year, current_month, selected_date
+            current_month += delta
+            if current_month > 12:
+                current_month = 1
+                current_year += 1
+            elif current_month < 1:
+                current_month = 12
+                current_year -= 1
+            selected_date = datetime(current_year, current_month, 1)
+            
+            # 检查当前月份是否是本月
+            now = datetime.now()
+            is_current_month = (current_year == now.year and current_month == now.month)
+            
+            # 控制回到本月按钮的显示
+            back_to_today_btn.visible = not is_current_month
+            
+            refresh_summary()
+            refresh_records_list()
+            month_text.value = f"{current_year}年{current_month}月"
+            page.update()
+        
+        def go_to_current_month(e):
+            """回到当前月份"""
+            nonlocal current_year, current_month, selected_date
+            now = datetime.now()
+            current_year = now.year
+            current_month = now.month
+            selected_date = now
+            
+            # 隐藏回到本月按钮
+            back_to_today_btn.visible = False
+            
+            refresh_summary()
+            refresh_records_list()
+            month_text.value = f"{current_year}年{current_month}月"
+            page.update()
+            show_bottom_message("已回到本月")
+
+        # ========== 添加收支记录对话框 ==========
+        def show_add_transaction_dialog(transaction_type="expense"):
+            """添加收支记录对话框（与添加事件界面风格一致）"""
+            dialog_container = None
+    
+            def close_dialog():
+                nonlocal dialog_container
+                if dialog_container and dialog_container in page.overlay:
+                    page.overlay.remove(dialog_container)
+                    dialog_container = None
+                    page.update()
+            
+            # 日期字段
+            date_field = ft.TextField(
+                label="日期",
+                value=datetime.now().strftime("%Y-%m-%d"),
+                read_only=True,
+                expand=True,
+            )
+            
+            # 根据收支类型显示不同的分类列表
+            categories = INCOME_CATEGORIES if transaction_type == "income" else EXPENSE_CATEGORIES
+            
+            category_field = ft.Dropdown(
+                label="分类",
+                options=[ft.dropdown.Option(c, c) for c in categories],
+                expand=True,
+                value=categories[0] if categories else None,
+            )
+            
+            amount_field = ft.TextField(
+                label="金额",
+                hint_text="请输入金额",
+                keyboard_type=ft.KeyboardType.NUMBER,
+                expand=True,
+            )
+            
+            note_field = ft.TextField(
+                label="备注",
+                hint_text="可选",
+                expand=True,
+                multiline=True,
+                max_lines=3,
+            )
+            
+            # 日期选择器
+            date_picker = ft.DatePicker(
+                first_date=datetime(2020, 1, 1),
+                last_date=datetime(2030, 12, 31),
+                on_change=lambda e: on_date_selected(e),
+            )
+
+            def on_date_selected(e):
+                if date_picker.value:
+                    # 添加8小时时区转换，解决手机端日期少一天的问题
+                    #local_date = date_picker.value + timedelta(hours=8)
+                    local_date = date_picker.value + timedelta(days=1)
+                    date_field.value = local_date.strftime("%Y-%m-%d")
+                    date_field.update()
+                    page.update()
+                    
+            date_field.on_click = lambda e: page.show_dialog(date_picker)
+            
+            def save_transaction(e):
+                try:
+                    amount = float(amount_field.value)
+                    if amount <= 0:
+                        show_bottom_message("金额必须大于0", is_error=True)
+                        return
+                    
+                    transaction_id = str(int(datetime.now().timestamp() * 1000))
+                    new_transaction = Transaction(
+                        id=transaction_id,
+                        date=date_field.value,
+                        type=transaction_type,
+                        category=category_field.value,
+                        amount=amount,
+                        note=note_field.value,
+                    )
+                    transactions.append(new_transaction)
+                    save_accounting_data()
+                    show_bottom_message(f"已添加{'收入' if transaction_type == 'income' else '支出'}: ¥{amount:,.2f}")
+                    close_dialog()
+                    refresh_records_list()
+                    refresh_summary()
+                except ValueError:
+                    show_bottom_message("请输入有效的金额", is_error=True)
+            
+            def cancel_click(e):
+                close_dialog()
+                show_bottom_message("已取消")
+            
+            # 顶部按钮栏（与添加事件一致）
+            top_bar = ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.CLOSE,
+                    icon_size=24,
+                    icon_color=ft.Colors.RED_700,
+                    tooltip="取消",
+                    on_click=cancel_click,
+                ),
+                ft.Text(f"添加{'收入' if transaction_type == 'income' else '支出'}", 
+                        size=18, weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.CENTER),
+                ft.IconButton(
+                    icon=ft.Icons.CHECK,
+                    icon_size=24,
+                    icon_color=ft.Colors.GREEN_700,
+                    tooltip="保存",
+                    on_click=save_transaction,
+                ),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            
+            # 可滚动的内容区域
+            scrollable_content = ft.Column([
+                ft.Container(height=1),
+                date_field,
+                category_field,
+                amount_field,
+                note_field,
+            ], spacing=15, scroll=ft.ScrollMode.AUTO)
+            
+            # 整体布局（带边框和阴影，与添加事件一致）
+            dialog_content = ft.Column([
+                top_bar,
+                ft.Divider(height=5),
+                ft.Container(
+                    content=scrollable_content,
+                    expand=True,
+                ),
+            ], spacing=10, height=420)
+            
+            dialog_container = ft.Container(
+                content=ft.Container(
+                    content=dialog_content,
+                    bgcolor=ft.Colors.WHITE,
+                    padding=20,
+                    border_radius=12,
+                    #border=ft.border.all(1, ft.Colors.BLUE_200),  # 添加蓝色边框
+                    shadow=ft.BoxShadow(
+                        spread_radius=1,
+                        blur_radius=15,
+                        color=ft.Colors.BLACK12,
+                    ),
+                    expand=True,
+                ),
+                left=20,
+                top=50,
+                right=20,
+                bottom=50,
+            )
+            
+            page.overlay.append(dialog_container)
+            page.update()
+
+        # ========== 添加菜单 ==========
+        def show_accounting_add_menu():
+            """显示记账添加菜单"""
+            menu_container = None
+
+            def close_menu():
+                nonlocal menu_container
+                if menu_container and menu_container in page.overlay:
+                    page.overlay.remove(menu_container)
+                    menu_container = None
+                    page.update()
+            
+            menu_content = ft.Container(
+                content=ft.Column([
+                    # 顶部图标
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.ADD_CIRCLE, size=48, color=ft.Colors.BLUE_700),
+                        padding=10,
+                        bgcolor=ft.Colors.BLUE_50,
+                        border_radius=50,
+                    ),
+                    ft.Text("添加记录", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                    ft.Text("请选择记录类型", size=12, color=ft.Colors.GREY_500),
+                    ft.Divider(height=1, color=ft.Colors.GREY_200),
+                    ft.ElevatedButton(
+                        "💰 收入", 
+                        on_click=lambda e: [close_menu(), show_add_transaction_dialog("income")], 
+                        icon=ft.Icons.ARROW_UPWARD,
+                        style=ft.ButtonStyle(
+                            bgcolor=ft.Colors.GREEN_700,
+                            color=ft.Colors.WHITE,
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                        ),
+                        expand=True,
+                    ),
+                    ft.ElevatedButton(
+                        "💸 支出", 
+                        on_click=lambda e: [close_menu(), show_add_transaction_dialog("expense")], 
+                        icon=ft.Icons.ARROW_DOWNWARD,
+                        style=ft.ButtonStyle(
+                            bgcolor=ft.Colors.RED_700,
+                            color=ft.Colors.WHITE,
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                        ),
+                        expand=True,
+                    ),
+                    ft.Divider(height=1, color=ft.Colors.GREY_200),
+                    ft.TextButton(
+                        "取消", 
+                        on_click=lambda e: close_menu(),
+                        style=ft.ButtonStyle(
+                            color=ft.Colors.GREY_600,
+                        ),
+                        expand=True,
+                    ),
+                ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                width=300,
+                padding=20,
+                bgcolor=ft.Colors.WHITE,
+                border_radius=20,
+                shadow=ft.BoxShadow(
+                    spread_radius=1,
+                    blur_radius=15,
+                    color=ft.Colors.BLACK12,
+                    offset=ft.Offset(0, 4),
+                ),
+            )
+            menu_container = ft.Container(
+                content=ft.Column([ft.Container(expand=True), ft.Row([ft.Container(expand=True), menu_content, ft.Container(expand=True)]), ft.Container(expand=True)]),
+                expand=True, bgcolor=ft.Colors.BLACK26, on_click=lambda e: close_menu(),
+            )
+            page.overlay.append(menu_container)
+            page.update()
+
+        # ========== 初始化界面 ==========
+        load_accounting_data()
+        
+        # 月份选择栏
+        month_text = ft.Text(f"{current_year}年{current_month}月", size=18, weight=ft.FontWeight.BOLD)
+        month_row = ft.Row([
+            ft.IconButton(ft.Icons.CHEVRON_LEFT, on_click=lambda e: change_month_acct(-1), icon_size=28),
+            month_text,
+            ft.IconButton(ft.Icons.CHEVRON_RIGHT, on_click=lambda e: change_month_acct(1), icon_size=28),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+        
+        # 统计卡片容器
+        summary_container = ft.Column(spacing=10)
+        
+        back_btn = ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda e: back_to_main())
+    
+        def back_to_main():
+            global current_page
+            current_page = "main"
+            # 恢复原来的点击事件
+            floating_add_button.on_click = original_floating_add_click
+            page.clean()
+            page.add(main_stack) # 重新添加主界面（包含悬浮按钮）
+            page.update()
+        
+        refresh_summary()
+        refresh_records_list()
+        
+        accounting_page = ft.Column([
+            ft.Row([back_btn], alignment=ft.MainAxisAlignment.START),
+            ft.Row([ft.Text("记账本", size=20, weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.CENTER)], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Divider(),
+            month_row,
+            summary_container,
+            ft.Divider(),
+            ft.Text("📋 记录列表", size=16, weight=ft.FontWeight.BOLD),  # 只有标题，没有添加按钮
+            records_list,
+        ], expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+
+        # 创建回到本月按钮（与回到今天按钮风格一致）
+        back_to_today_btn = ft.Container(
+            content=ft.Icon(ft.Icons.TODAY, size=24, color=ft.Colors.BLUE_700),
+            width=50,
+            height=50,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=25,
+            ink=True,
+            on_click=go_to_current_month,
+            tooltip="回到本月",
+            #border=ft.border.all(1, ft.Colors.BLUE_200),
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=8,
+                color=ft.Colors.BLACK12,
+                offset=ft.Offset(0, 2),
+            ),
+            visible=False,  # 初始隐藏
+        )
+        
+        # 悬浮按钮组（垂直排列）
+        floating_buttons = ft.Column(
+            [
+                back_to_today_btn,
+                ft.Container(height=12),  # 固定高度的间距
+                floating_add_button,
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=0,
+        )
+
+        # 使用 Stack 布局，将悬浮按钮放在右下角
+        accounting_stack = ft.Stack(
+            [
+                accounting_page,  # 原有的记账页面内容
+                ft.Container(
+                    content=floating_buttons,
+                    right=20,
+                    bottom=20,
+                ),
+            ],
+            expand=True,
+        )
+        
+        page.clean()
+        page.add(accounting_stack)
+        page.update()
+
+
     def on_date_text_click(e):
         """点击日期文本时显示事件选择菜单"""
         print(f"[点击事件] 日期文本被点击！")
@@ -7232,11 +8034,11 @@ def main(page: ft.Page):
                     time.sleep(60)
         
         def time_reminder_loop():
-            """时间提醒循环 - 每2分钟检查"""
+            """时间提醒循环 - 每10分钟检查"""
             while True:
                 try:
                     show_notification(page, "🔔 保活通知", f"当前时间: {datetime.now().strftime('%H:%M:%S')}")      # 2分钟发个通知
-                    time.sleep(120)           # 每2分钟检查一次
+                    time.sleep(600)           # 每10分钟检查一次
                 except Exception as e:
                     print(f"时间提醒循环出错: {e}")
                     time.sleep(30)
@@ -7249,7 +8051,7 @@ def main(page: ft.Page):
         time_thread.start()
         
         print("后台定时检查已启动（每小时检查事件）")
-        print("时间提醒检查已启动（每2分钟检查）")
+        print("时间提醒检查已启动（每10分钟检查）")
 
 
     def number_to_chinese_month(month):
@@ -7468,7 +8270,7 @@ def main(page: ft.Page):
         show_bottom_message(f"已回到今天 {today.strftime('%Y年%m月%d日')}")
 
     def change_month(delta):
-        global current_year, current_month
+        global current_year, current_month, selected_date
         current_month += delta
         if current_month > 12:
             current_month = 1
@@ -7476,45 +8278,64 @@ def main(page: ft.Page):
         elif current_month < 1:
             current_month = 12
             current_year -= 1
+        
+        # 切换月份后，清除选中的日期
+        selected_date = None
+        
         update_calendar()
 
     def change_year(delta):
         """改变年份"""
-        global current_year, current_month
+        global current_year, current_month, selected_date
         current_year += delta
         # 确保年份在合理范围内（1900-2100）
         if current_year < 1900:
             current_year = 1900
         elif current_year > 2100:
             current_year = 2100
+        
+        # 切换年份后，清除选中的日期
+        selected_date = None
+        
         update_calendar()
 
     def update_calendar():
-        global selected_date  # 声明使用全局变量
-
+        global selected_date
+        
         # 更新月份文本显示
         month_text.value = f"{current_year}年{current_month}月"
         
-        # ========== 检查当前选中的日期是否是今天 ==========
-        today = datetime.now().date()
-        is_selected_today = (selected_date == today) if selected_date else False
+        # ========== 判断是否显示返回按钮 ==========
+        today = datetime.now()
+        is_current_month = (current_year == today.year and current_month == today.month)
         
-        # 只要选中的日期不是今天，就显示返回按钮
-        # 如果没有选中任何日期，也不显示
-        today_circle_button.visible = selected_date is not None and not is_selected_today
-
-        # ========== 更新按钮上的日期数字（关键修复） ==========
-        # 更新按钮上的日期数字
-        if hasattr(today_circle_button, 'content'):
-            # 如果 content 是 Text 控件
+        # 获取今天日期
+        today_date = datetime.now().date()
+        is_selected_today = (selected_date == today_date) if selected_date else False
+        
+        # 决定是否显示返回按钮
+        if today_circle_button:
+            if is_current_month:
+                # 本月：只有选中了非今天的日期时才显示
+                today_circle_button.visible = selected_date is not None and not is_selected_today
+            else:
+                # 其他月份：始终显示
+                today_circle_button.visible = True
+            
+            print(f"[调试] 本月: {is_current_month}, 选中日期: {selected_date}, 是今天: {is_selected_today}")
+            print(f"[调试] 按钮显示: {today_circle_button.visible}")
+        
+        # 更新按钮上的日期数字（显示今天的日期）
+        if today_circle_button and hasattr(today_circle_button, 'content'):
             if isinstance(today_circle_button.content, ft.Text):
                 today_circle_button.content.value = str(today.day)
-            # 如果 content 是 Column 控件（包含 Text）
             elif isinstance(today_circle_button.content, ft.Column):
                 if today_circle_button.content.controls and len(today_circle_button.content.controls) > 0:
                     if isinstance(today_circle_button.content.controls[0], ft.Text):
                         today_circle_button.content.controls[0].value = str(today.day)
-        today_circle_button.tooltip = f"回到今天 ({today.month}月{today.day}日)"
+        if today_circle_button:
+            today_circle_button.tooltip = f"回到今天 ({today.month}月{today.day}日)"
+            #today_circle_button.update()
         
         # 清空表格并重新生成
         data_table.rows.clear()
@@ -7522,7 +8343,7 @@ def main(page: ft.Page):
         
         # 日期点击处理函数
         def on_date_click(e, year, month, day):
-            global selected_date, current_date, previous_view  # 添加 previous_view 记录之前的视图
+            global selected_date, current_date, previous_view
             selected_date = datetime(year, month, day).date()
             print(f"选中日期: {selected_date}")
             
@@ -7535,9 +8356,11 @@ def main(page: ft.Page):
             # 传入筛选日期刷新事件列表
             refresh_events_list(filter_date=selected_date)
             
+            # 更新日历（会重新计算返回按钮的显示）
+            update_calendar()
+            
             show_bottom_message(f"已切换到 {selected_date.strftime('%Y年%m月%d日')}")
             
-            update_calendar()
             page.update()
         
         for week in calendar.monthcalendar(current_year, current_month):
@@ -8281,6 +9104,14 @@ def main(page: ft.Page):
 
     count_text = ft.Text(value=f"📊 事件总数: {len(events)}", size=12, color=ft.Colors.BLUE_700)
     
+    async def async_start_marquee():
+        """异步启动滚动字幕"""
+        marquee_text.start()
+
+    async def async_stop_marquee():
+        """异步停止滚动字幕"""
+        marquee_text.stop()
+
     # ========== 添加 update_current_playing_info 函数在这里 ==========
     def update_current_playing_info():
         """更新顶部当前播放信息显示"""
@@ -8314,12 +9145,12 @@ def main(page: ft.Page):
                     full_text = f"🎵 试听中: {music_name}"
                     marquee_text.color = ft.Colors.BLUE_700
                     marquee_text.update_text(full_text)
-                    marquee_text.start()
+                    page.run_task(async_start_marquee)
                 else:
                     full_text = f"⏸️ 已暂停: {music_name}"
                     marquee_text.color = ft.Colors.ORANGE_700
                     marquee_text.update_text(full_text)
-                    marquee_text.stop()
+                    page.run_task(async_stop_marquee)
             else:
                 # 正式事件
                 event = events[current_playing_event_id]
@@ -8334,12 +9165,12 @@ def main(page: ft.Page):
                     full_text = f"播放中: {event_icon}【{event.name}】- {event_type_text} : {music_name}"
                     marquee_text.color = ft.Colors.BLUE_700
                     marquee_text.update_text(full_text)
-                    marquee_text.start()
+                    page.run_task(async_start_marquee)
                 else:
                     full_text = f"已暂停: {music_name}"
                     marquee_text.color = ft.Colors.ORANGE_700
                     marquee_text.update_text(full_text)
-                    marquee_text.stop()
+                    page.run_task(async_stop_marquee)
         else:
             # 停止状态，隐藏音乐区域
             if music_section_container:
@@ -8350,7 +9181,7 @@ def main(page: ft.Page):
                 playback_buttons.update()
             marquee_text.update_text("🎵 未播放")
             marquee_text.color = ft.Colors.GREY_600
-            marquee_text.stop()
+            page.run_task(async_stop_marquee)
             if marquee_text._initialized:
                 marquee_text._draw_frame()
         
@@ -8399,14 +9230,15 @@ def main(page: ft.Page):
     playback_buttons = ft.Row([
         ft.TextButton("⏸️ 暂停", on_click=pause_music, tooltip="暂停音乐"),
         ft.TextButton("⏹️ 停止", on_click=lambda e: stop_music(), tooltip="停止音乐"),
-    ], spacing=20, visible=False)  # 初始隐藏
+    ], spacing=2, visible=False)  # 初始隐藏
 
     # 创建导入导出按钮（始终显示）
     import_export_buttons = ft.Row([
         ft.TextButton("📥 导入", on_click=import_events_wrapper, tooltip="从Excel导入事件"),
         ft.TextButton("📤 导出", on_click=export_events_wrapper, tooltip="导出事件到Excel"),
+        ft.TextButton("💰 记账", on_click=lambda e: show_accounting_page(page), tooltip="记账本"),
         #ft.TextButton("🔔 通知", on_click=test_notification)
-    ], spacing=20)
+    ], spacing=2)
 
 
     # 创建音乐播放相关内容的容器
@@ -8457,7 +9289,7 @@ def main(page: ft.Page):
                 ft.Row([
                     playback_buttons,
                     import_export_buttons,
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=2),
 
                 ft.Divider(),
                 
@@ -8534,8 +9366,8 @@ def main(page: ft.Page):
         border_radius=30,
         padding=14,
         ink=True,
-        on_click=lambda e: open_add_dialog(is_edit=False),
-        tooltip="添加事件",
+        #on_click=lambda e: open_add_dialog(is_edit=False),
+        #tooltip="添加事件",
         shadow=ft.BoxShadow(
             spread_radius=1,
             blur_radius=10,
@@ -8544,6 +9376,22 @@ def main(page: ft.Page):
         ),
     )
 
+    def on_floating_add_click(e):
+        """悬浮按钮点击事件（根据当前页面执行不同操作）"""
+        global current_page
+        
+        if current_page == "main":
+            # 主界面：添加事件
+            open_add_dialog(is_edit=False)
+        elif current_page == "accounting":
+            # 记账页面：显示添加记录菜单
+            #show_accounting_add_menu(page)
+            pass
+        #else:
+            #open_add_dialog(is_edit=False)
+
+    floating_add_button.on_click = on_floating_add_click
+
     # 使用 Stack 布局，返回按钮在添加按钮上方
     # 悬浮按钮组
     floating_buttons = ft.Column(
@@ -8551,7 +9399,7 @@ def main(page: ft.Page):
             today_circle_button,
             floating_add_button,
         ],
-        spacing=12,  # 按钮间距
+        spacing=12,  # 按钮间距 
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
     )
 
