@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.32"
-APP_VERSION_CODE = 32
+APP_VERSION = "1.0.33"
+APP_VERSION_CODE = 33
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -2853,7 +2853,7 @@ def main(page: ft.Page):
 
     def stop_music():
         global current_audio, is_playing, current_music_file, current_lyrics
-        global current_playing_event_id, current_music_state
+        global current_playing_event_id, current_music_state, music_section_container, playback_buttons
         
         print("停止音乐")
         
@@ -2876,8 +2876,12 @@ def main(page: ft.Page):
             clearing_event_id = current_playing_event_id
             
             # 立即清除状态，防止后续回调
+            # 清空音乐文件路径（关键）
+            current_music_file = None
             current_playing_event_id = None
             current_music_state = "stopped"
+            is_playing = False
+            current_lyrics = []
 
             # ========== 关键：调用更新函数来刷新UI ==========
             update_current_playing_info()  # 添加这行
@@ -2916,6 +2920,14 @@ def main(page: ft.Page):
                     print(f"停止音乐出错: {e}")
             
             asyncio.create_task(stop_async())
+
+            # 隐藏音乐区域
+            if music_section_container:
+                music_section_container.visible = False
+                music_section_container.update()
+            if playback_buttons:
+                playback_buttons.visible = False
+                playback_buttons.update()
             
             # 重置状态
             current_music_file = None
@@ -3588,6 +3600,7 @@ def main(page: ft.Page):
             summary_container.controls.append(
                 ft.Container(
                     content=ft.Column([
+                        ft.Divider(height=1),
                         ft.Text(f"📅 {current_year}年{current_month}月", size=14, weight=ft.FontWeight.BOLD),
                         ft.Row([
                             ft.Column([
@@ -3609,7 +3622,7 @@ def main(page: ft.Page):
                         ], alignment=ft.MainAxisAlignment.END),
                     ], spacing=8),
                     padding=12,
-                    bgcolor=ft.Colors.GREY_50,
+                    bgcolor=ft.Colors.TRANSPARENT,
                     border_radius=10,
                 )
             )
@@ -3962,8 +3975,19 @@ def main(page: ft.Page):
             page.clean()
             page.add(main_stack) # 重新添加主界面（包含悬浮按钮）
 
-            # ========== 刷新音乐播放信息，重新启动滚动 ==========
-            update_current_playing_info()
+            # 只有当音乐正在播放或暂停时才刷新播放信息
+            if current_music_state in ["playing", "paused"] and current_music_file:
+                update_current_playing_info()
+            else:
+                # 确保音乐区域隐藏
+                if music_section_container:
+                    music_section_container.visible = False
+                    music_section_container.update()
+                if playback_buttons:
+                    playback_buttons.visible = False
+                    playback_buttons.update()
+                marquee_text.update_text("🎵 未播放")
+                marquee_text.color = ft.Colors.GREY_600
 
             page.update()
         
@@ -3971,16 +3995,25 @@ def main(page: ft.Page):
         refresh_records_list()
         
         accounting_page = ft.Column([
-            ft.Container(height=12),  # 添加顶部空白，避开手机状态栏
-            ft.Row([back_btn], alignment=ft.MainAxisAlignment.START),
-            ft.Row([ft.Text("记账本", size=20, weight=ft.FontWeight.BOLD, expand=True, text_align=ft.TextAlign.CENTER)], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Container(height=15),
+            ft.Row([
+                ft.Container(
+                    content=back_btn,
+                    width=40,
+                ),
+                ft.Text("📊 记账本", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700, expand=True, text_align=ft.TextAlign.CENTER),
+                ft.Container(width=40),  # 右侧空白，保持标题居中
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Divider(),
             month_row,
             summary_container,
             ft.Divider(),
-            ft.Text("📋 记录列表", size=16, weight=ft.FontWeight.BOLD),  # 只有标题，没有添加按钮
+            ft.Row([
+                ft.Icon(ft.Icons.LIST, size=18, color=ft.Colors.BLUE_700),
+                ft.Text("记录列表", size=16, weight=ft.FontWeight.BOLD),
+            ], spacing=5),
             records_list,
-        ], expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+        ], expand=True, spacing=12, scroll=ft.ScrollMode.AUTO)
 
         # 创建回到本月按钮（与回到今天按钮风格一致）
         back_to_today_btn = ft.Container(
@@ -9875,9 +9908,15 @@ def main(page: ft.Page):
         # 标题
         ft.Container(
             content=ft.Column([
-                ft.Text("📅 事件提醒助手", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
-                ft.Text("支持各类事件提醒功能，包括生日、每月、每天及每周等等事件", size=12, color=ft.Colors.GREY_600),
-            ], horizontal_alignment=ft.CrossAxisAlignment.START),
+                ft.Text(
+                    "📅 记事本", 
+                    size=20, 
+                    weight=ft.FontWeight.BOLD, 
+                    color=ft.Colors.BLUE_700, 
+                    text_align=ft.TextAlign.CENTER,
+                    width=float("inf"),  # 让文本占满宽度，才能居中
+                )
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=13,
         ),
 
@@ -9982,8 +10021,6 @@ def main(page: ft.Page):
         border_radius=30,
         padding=14,
         ink=True,
-        #on_click=lambda e: open_add_dialog(is_edit=False),
-        #tooltip="添加事件",
         shadow=ft.BoxShadow(
             spread_radius=1,
             blur_radius=10,
@@ -9999,12 +10036,6 @@ def main(page: ft.Page):
         if current_page == "main":
             # 主界面：添加事件
             open_add_dialog(is_edit=False)
-        elif current_page == "accounting":
-            # 记账页面：显示添加记录菜单
-            #show_accounting_add_menu(page)
-            pass
-        #else:
-            #open_add_dialog(is_edit=False)
 
     floating_add_button.on_click = on_floating_add_click
 
@@ -10157,7 +10188,6 @@ def main(page: ft.Page):
     page.on_close = on_page_close
     
     async def update_all():
-        #global last_check_date, reminder_flags, current_year, current_month, selected_date, current_date, current_view  # 添加需要修改的全局变量
         global last_check_date, reminder_flags, current_year, current_month, selected_date, current_date, current_view, three_days_events, sent_notifications
         
         while True:
@@ -10224,14 +10254,6 @@ def main(page: ft.Page):
                     reminder_flags.clear()
                     print(f"[跨天检测] 已重置提醒标记")
 
-
-                    # ========== 5. 根据当前视图决定是否需要切换 ==========
-                    # 如果当前是今日事件视图，跨天后切换到全部事件（因为今天是新的一天）
-                    #if current_view == "today":
-                        #current_view = "all"
-                        #print(f"[跨天检测] 今日事件视图已过期，切换到全部事件视图")
-
-
                     # ========== 5. 关键：重新计算 three_days_events ==========
                     three_days_events = []
                     for evt in events.values():
@@ -10248,10 +10270,10 @@ def main(page: ft.Page):
 
                     determine_startup_view()
                     
-                    # ========== 6. 刷新事件列表（根据当前视图） ==========
+                    # ========== 7. 刷新事件列表（根据当前视图） ==========
                     refresh_current_view_by_state()
 
-                    # ========== 7. 立即执行事件检查 ==========
+                    # ========== 8. 立即执行事件检查 ==========
                     check_events()
                 
                 # 原有的更新时钟代码继续...
@@ -10310,17 +10332,14 @@ def main(page: ft.Page):
             await asyncio.sleep(60)  # 每分钟刷新一次
             # ========== 根据当前视图刷新对应的视图 ==========
             refresh_current_view_by_state()
-            #refresh_events_list()
             print(f"[自动刷新] 已刷新当前视图 ({current_view}) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     asyncio.create_task(auto_refresh())
 
-    #refresh_events_list()
-
-    # 手动调用一次，确保初始状态正确
+    # 更新顶部当前播放信息显示
     update_current_playing_info()
 
-    # 然后根据事件情况决定显示什么视图
+    # 根据事件情况决定显示什么视图
     determine_startup_view()
 
     # 延迟2秒后执行首次检查
