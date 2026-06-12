@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.31"
-APP_VERSION_CODE = 31
+APP_VERSION = "1.0.32"
+APP_VERSION_CODE = 32
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -1591,7 +1591,7 @@ def main(page: ft.Page):
     # 初始化当前页面
     current_page = "main"  # "main" 或 "accounting"
 
-    #current_display_view = "main"  # main: 全部/今日事件, warning: 预警事件
+    current_display_view = "main"  # main: 全部/今日事件, warning: 预警事件
 
     # 在函数外部定义全局变量
     selected_date = None  # 选中的日期，初始为None
@@ -1934,6 +1934,10 @@ def main(page: ft.Page):
 
                 # ========== 根据当前视图刷新对应的视图 ==========
                 refresh_current_view_by_state()
+
+                # ========== 导入后重新检查视图 ==========
+                determine_startup_view()
+
                 show_bottom_message(f"已删除「{name}」")
             except Exception as ex:
                 show_bottom_message(f"删除失败: {str(ex)}")
@@ -3197,34 +3201,61 @@ def main(page: ft.Page):
         today = datetime.now().date()
         three_days_events = []
         
+        print(f"[预警事件] 开始收集，当前日期: {today}")
+        
         for event in events.values():
+            # 跳过每天事件和每周事件
             if event.event_type == "daily" or event.event_type == "weekly":
                 continue
+            
             month, day, year, base_year, days_until = event.get_next_date_info()
+            print(f"[预警事件] 检查: {event.name}, 类型: {event.event_type}, 剩余天数: {days_until}")
+            
+            # 一次性事件特殊处理
             if event.repeat_type == "once":
                 if event.completed or days_until < 0:
+                    print(f"[预警事件]   - 跳过（已完成或已过期）")
                     continue
-            if 0 < days_until <= 3:
-                three_days_events.append((event, days_until))
+            
+            # 每月事件：检查剩余天数
+            if event.event_type == "monthly":
+                if 0 < days_until <= 3:
+                    three_days_events.append((event, days_until))
+                    print(f"[预警事件]   - 添加每月事件到预警列表")
+            
+            # 生日/纪念日：检查剩余天数
+            elif event.event_type in ["birthday", "event"]:
+                if 0 < days_until <= 3:
+                    three_days_events.append((event, days_until))
+                    print(f"[预警事件]   - 添加生日/纪念日到预警列表")
+            
+            # 一次性事件：检查剩余天数
+            elif event.repeat_type == "once":
+                if 0 < days_until <= 3:
+                    three_days_events.append((event, days_until))
+                    print(f"[预警事件]   - 添加一次性事件到预警列表")
         
-        # 按剩余天数排序（由近到远）
+        print(f"[预警事件] 共找到 {len(three_days_events)} 个预警事件")
+        
+        # 按剩余天数排序
         three_days_events.sort(key=lambda x: x[1])
         
-        # 先添加标题行（包含下拉框），始终显示
+        # 添加标题行
         if hasattr(refresh_events_list, 'view_dropdown'):
+            title_text = f"⏰ 预警事件 ({len(three_days_events)}个)" if three_days_events else "⏰ 预警事件"
             events_list.controls.append(ft.Row([
-                ft.Text(f"⏰ 预警事件 ({len(three_days_events)}) 个", size=18, weight=ft.FontWeight.BOLD, expand=True),
+                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD, expand=True),
                 refresh_events_list.view_dropdown,
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
             events_list.controls.append(ft.Divider(height=10))
         
-        # 然后显示事件内容
+        # 显示事件内容
         if not three_days_events:
             events_list.controls.append(
                 ft.Container(
                     content=ft.Column([
                         ft.Text("✨ 最近3天内没有事件", size=14, color=ft.Colors.GREEN_700),
-                    ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    ], spacing=8),
                     padding=20,
                 )
             )
@@ -3235,6 +3266,37 @@ def main(page: ft.Page):
         page.update()
     
     # ===========================  记账功能添加 ===================================
+    # 加载记账数据
+    def load_accounting_data():
+        global transactions
+        try:
+            json_path = get_data_file_path("accounting.json")
+            if os.path.exists(json_path):
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    transactions = [Transaction.from_dict(t) for t in data.get("transactions", [])]
+            else:
+                # 首次使用，创建空记录
+                transactions = []
+                save_accounting_data()
+        except Exception as e:
+            print(f"加载记账数据失败: {e}")
+            transactions = []
+    
+    # 保存记账数据
+    def save_accounting_data():
+        global transactions
+        try:
+            json_path = get_data_file_path("accounting.json")
+            data = {
+                "transactions": [t.to_dict() for t in transactions],
+            }
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"记账数据已保存，共 {len(transactions)} 条记录")
+        except Exception as e:
+            print(f"保存记账数据失败: {e}")
+
     def show_accounting_page(page: ft.Page):
         """显示记账页面（升级版：支持按月查询、编辑、删除）"""
         global transactions
@@ -3258,35 +3320,8 @@ def main(page: ft.Page):
         # 记录列表容器
         records_list = ft.Column(spacing=5, scroll=ft.ScrollMode.AUTO, expand=True)
         
-        # 加载记账数据
-        def load_accounting_data():
-            global transactions
-            try:
-                json_path = get_data_file_path("accounting.json")
-                if os.path.exists(json_path):
-                    with open(json_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        transactions = [Transaction.from_dict(t) for t in data.get("transactions", [])]
-                else:
-                    # 首次使用，创建空记录
-                    transactions = []
-                    save_accounting_data()
-            except Exception as e:
-                print(f"加载记账数据失败: {e}")
-                transactions = []
-        
-        def save_accounting_data():
-            global transactions
-            try:
-                json_path = get_data_file_path("accounting.json")
-                data = {
-                    "transactions": [t.to_dict() for t in transactions],
-                }
-                with open(json_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                print(f"记账数据已保存，共 {len(transactions)} 条记录")
-            except Exception as e:
-                print(f"保存记账数据失败: {e}")
+        # 加载数据
+        load_accounting_data()  # 使用外部函数
 
         def delete_transaction(transaction_id, transaction_name):
             """删除记录（带确认对话框）"""
@@ -4670,7 +4705,10 @@ def main(page: ft.Page):
     def get_event_type_name(event):
         """获取事件类型名称"""
         if event.event_type == "daily":
-            return "每天"
+            if hasattr(event, 'workday_only') and event.workday_only:
+                return "工作日"
+            else:
+                return "每天"
         elif event.event_type == "weekly":
             return "每周"
         elif event.event_type == "birthday":
@@ -4687,10 +4725,23 @@ def main(page: ft.Page):
         month, day, year, base_year, _ = event.get_next_date_info()
         
         if event.event_type == "daily":
-            if event.reminders:
-                time_list = [r.get("time", "") for r in event.reminders if r.get("enabled")]
-                return f"每天 {' '.join(time_list)}"
-            return "每天"
+            # 检查是否开启了法定工作日提醒
+            if hasattr(event, 'workday_only') and event.workday_only:
+                # 显示工作日提醒
+                if event.reminders:
+                    time_list = [r.get("time", "") for r in event.reminders if r.get("enabled")]
+                    time_str = " ".join(time_list)
+                    return f"工作日提醒 {time_str}"
+                else:
+                    return "工作日提醒"
+            else:
+                # 普通每天提醒
+                if event.reminders:
+                    time_list = [r.get("time", "") for r in event.reminders if r.get("enabled")]
+                    time_str = " ".join(time_list)
+                    return f"每天 {time_str}"
+                else:
+                    return "每天"
         elif event.event_type == "weekly":
             weekday_names = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"]
             weekday_num = int(event.birth_date) if event.birth_date else 1
@@ -4730,7 +4781,11 @@ def main(page: ft.Page):
         elif event.event_type == "monthly":
             return "📆 每月提醒"
         elif event.event_type == "daily":
-            return "📆 每天提醒"
+            # 检查是否开启了法定工作日提醒
+            if getattr(event, 'workday_only', False):
+                return "📆 工作日提醒"
+            else:
+                return "📆 每天提醒"
         elif event.event_type == "weekly":
             return "📅 每周提醒"
         elif event.repeat_type == "once":
@@ -5072,8 +5127,6 @@ def main(page: ft.Page):
                 three_days_events.append((evt, days_until))
                 
     def refresh_events_list(filter_date=None):
-        #刷新事件列表，支持按日期筛选
-
         global current_playing_event_id, current_music_state , three_days_events, current_view
         print(f"[DEBUG] refresh_events_list 被调用, filter_date={filter_date}, current_view={current_view}")
         events_list.controls.clear()
@@ -7303,6 +7356,9 @@ def main(page: ft.Page):
                     # 根据当前视图刷新对应的视图
                     refresh_current_view_by_state()
 
+                    # ========== 保存后重新检查视图 ==========
+                    determine_startup_view()
+
                     close_dialog()
                     show_snack_bar(f"已更新「{name}」")
                 except Exception as e:
@@ -7340,6 +7396,9 @@ def main(page: ft.Page):
                     
                     # 根据当前视图刷新对应的视图
                     refresh_current_view_by_state()
+
+                    # ========== 保存后重新检查视图 ==========
+                    determine_startup_view()
 
                     close_dialog()
                     show_snack_bar(f"已添加「{name}」")
@@ -7970,6 +8029,9 @@ def main(page: ft.Page):
             if modified:
                 save_events()
                 print(f"[强制重置] 已完成事件状态重置")
+
+                # ========== 状态重置后重新检查视图 ==========
+                determine_startup_view()
             
             # ========== 原有的检查逻辑 ==========
             print(f"[定时检查] ========== 开始检查事件 ==========")
@@ -8147,10 +8209,9 @@ def main(page: ft.Page):
                         '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十']
         return chinese_days[day - 1] if 1 <= day <= 30 else str(day)
 
-    load_events()
+    load_events()           # 加载事件列表
 
-
-    
+    load_accounting_data()  # 加载记账列表
 
     # ========== 粘贴你提供的日历测试代码 ==========
     current_year = datetime.now().year
@@ -8974,13 +9035,16 @@ def main(page: ft.Page):
                 events.clear()
                 events.update(new_events)
                 save_events(trigger_check=False)
+
                 refresh_current_view_by_state()
+
                 update_calendar()
 
                 # ========== 导入成功后，立即检查今日事件 ==========
                 # 直接调用，不需要 Timer
                 check_events()
                 check_time_reminders()
+                # ========== 导入后重新检查视图 ==========
                 determine_startup_view()
                 
                 show_bottom_message(f"成功导入 {imported_count} 条事件")
@@ -9098,6 +9162,478 @@ def main(page: ft.Page):
         page.overlay.append(menu_container)
         page.update()
 
+    # ========== 记账数据导入导出 ==========
+    async def export_accounting_async(e):
+        """导出记账数据到Excel"""
+        global transactions  # 添加这行，确保使用全局变量
+        try:
+
+            print(f"[导出记账] transactions 数量: {len(transactions)}")  # 添加调试
+            
+            if not transactions:
+                show_bottom_message("没有记账数据可导出")
+                return
+            
+            temp_dir = get_data_file_path("")
+            temp_file = os.path.join(temp_dir, f"accounting_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "记账本"
+            
+            # 写入表头
+            headers = ["日期", "类型", "分类", "金额", "备注"]
+            ws.append(headers)
+            
+            # 设置表头样式
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=1, column=col)
+                cell.font = openpyxl.styles.Font(bold=True)
+                cell.fill = openpyxl.styles.PatternFill(start_color="CCE6FF", end_color="CCE6FF", fill_type="solid")
+            
+            # 写入数据
+            for t in transactions:
+                type_str = "收入" if t.type == "income" else "支出"
+                ws.append([
+                    t.date,
+                    type_str,
+                    t.category,
+                    t.amount,
+                    t.note,
+                ])
+            
+            # 调整列宽
+            ws.column_dimensions['A'].width = 12
+            ws.column_dimensions['B'].width = 8
+            ws.column_dimensions['C'].width = 15
+            ws.column_dimensions['D'].width = 12
+            ws.column_dimensions['E'].width = 30
+            
+            wb.save(temp_file)
+            
+            with open(temp_file, 'rb') as f:
+                file_bytes = f.read()
+            
+            file_picker = ft.FilePicker()
+            page.services.append(file_picker)
+            page.update()
+            
+            result = await file_picker.save_file(
+                file_name=f"accounting_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                src_bytes=file_bytes,
+                dialog_title="保存记账Excel文件"
+            )
+            
+            page.services.remove(file_picker)
+            page.update()
+            os.remove(temp_file)
+            
+            if result:
+                show_bottom_message(f"成功导出 {len(transactions)} 条记账记录")
+            else:
+                show_bottom_message("已取消导出")
+            
+            page.update()
+            
+        except Exception as ex:
+            show_bottom_message(f"导出失败: {str(ex)}")
+            print(f"导出错误: {ex}")
+            import traceback
+            traceback.print_exc()
+
+
+    async def import_accounting_async(e):
+        """从Excel导入记账数据"""
+        global transactions  # 添加这行
+        
+        menu_container = None
+        
+        def close_menu():
+            nonlocal menu_container
+            if menu_container and menu_container in page.overlay:
+                page.overlay.remove(menu_container)
+                menu_container = None
+                page.update()
+        
+        async def select_file_and_import():
+            file_picker = None
+            try:
+                file_picker = ft.FilePicker()
+                page.services.append(file_picker)
+                page.update()
+                
+                result = await file_picker.pick_files(
+                    allow_multiple=False,
+                    allowed_extensions=["xlsx", "xls"],
+                    dialog_title="选择记账Excel文件"
+                )
+                
+                if file_picker and file_picker in page.overlay:
+                    page.services.remove(file_picker)
+                page.update()
+                
+                if not result or len(result) == 0:
+                    show_bottom_message("未选择文件")
+                    return
+                
+                if hasattr(result[0], 'path'):
+                    file_path = result[0].path
+                elif hasattr(result[0], 'bytes'):
+                    temp_dir = get_data_file_path("")
+                    temp_file = os.path.join(temp_dir, f"temp_accounting_import_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+                    with open(temp_file, 'wb') as f:
+                        f.write(result[0].bytes)
+                    file_path = temp_file
+                else:
+                    file_path = str(result[0])
+                
+                await do_import_accounting(file_path)
+                
+                if 'temp_file' in locals() and os.path.exists(temp_file):
+                    os.remove(temp_file)
+                
+            except Exception as ex:
+                show_bottom_message(f"导入失败: {str(ex)}")
+                print(f"导入错误: {ex}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                if file_picker and file_picker in page.overlay:
+                    page.overlay.remove(file_picker)
+                page.update()
+        
+        def on_select_file():
+            close_menu()
+            asyncio.create_task(select_file_and_import())
+        
+        def on_cancel():
+            close_menu()
+            show_bottom_message("已取消导入")
+        
+        async def do_import_accounting(file_path):
+            show_bottom_message(f"正在导入记账数据: {os.path.basename(file_path)}")
+            page.update()
+            
+            wb = load_workbook(file_path)
+            ws = wb.active
+            
+            imported_count = 0
+            skipped_count = 0
+            new_transactions = []
+            
+            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                if not row or len(row) < 4:
+                    continue
+                
+                date = str(row[0]).strip() if row[0] else ""
+                type_str = str(row[1]).strip() if row[1] else ""
+                category = str(row[2]).strip() if row[2] else ""
+                amount_str = str(row[3]).strip() if row[3] else ""
+                note = str(row[4]).strip() if len(row) > 4 and row[4] else ""
+                
+                if not date or not category or not amount_str:
+                    skipped_count += 1
+                    continue
+                
+                try:
+                    amount = float(amount_str)
+                    if amount <= 0:
+                        skipped_count += 1
+                        continue
+                except:
+                    skipped_count += 1
+                    continue
+                
+                if type_str == "收入":
+                    transaction_type = "income"
+                elif type_str == "支出":
+                    transaction_type = "expense"
+                else:
+                    skipped_count += 1
+                    continue
+                
+                transaction_id = str(int(datetime.now().timestamp() * 1000) + imported_count)
+                new_transaction = Transaction(
+                    id=transaction_id,
+                    date=date,
+                    type=transaction_type,
+                    category=category,
+                    amount=amount,
+                    note=note,
+                )
+                new_transactions.append(new_transaction)
+                imported_count += 1
+            
+            if imported_count == 0:
+                show_bottom_message(f"没有导入任何记账记录，跳过 {skipped_count} 行")
+                return
+            
+            confirm_dialog_container = None
+            
+            def close_confirm_dialog():
+                nonlocal confirm_dialog_container
+                if confirm_dialog_container and confirm_dialog_container in page.overlay:
+                    page.overlay.remove(confirm_dialog_container)
+                    confirm_dialog_container = None
+                    page.update()
+            
+            def confirm_replace():
+                close_confirm_dialog()
+                global transactions
+                transactions = new_transactions
+                save_accounting_data()
+                show_bottom_message(f"成功导入 {imported_count} 条记账记录")
+                page.update()
+            
+            def cancel_replace():
+                close_confirm_dialog()
+                show_bottom_message("已取消导入")
+                page.update()
+            
+            confirm_content = ft.Container(
+                content=ft.Column([
+                    ft.Container(
+                        content=ft.Icon(ft.Icons.INFO, size=55, color=ft.Colors.BLUE_700),
+                        padding=10,
+                        bgcolor=ft.Colors.BLUE_50,
+                        border_radius=50,
+                    ),
+                    ft.Text("确认导入记账数据", size=22, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700),
+                    ft.Divider(),
+                    ft.Text(f"即将导入 {imported_count} 条记账记录", size=14),
+                    ft.Text(f"当前有 {len(transactions)} 条记录将被替换", size=12, color=ft.Colors.ORANGE_700),
+                    ft.Divider(),
+                    ft.Row([
+                        ft.ElevatedButton("取消", on_click=lambda e: cancel_replace(), expand=True),
+                        ft.ElevatedButton("确认导入", on_click=lambda e: confirm_replace(), expand=True,
+                                        style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE)),
+                    ], spacing=12),
+                ], spacing=15),
+                width=320, padding=20, bgcolor=ft.Colors.WHITE, border_radius=16,
+            )
+            
+            confirm_dialog_container = ft.Container(
+                content=ft.Column([
+                    ft.Container(expand=True),
+                    ft.Row([ft.Container(expand=True), confirm_content, ft.Container(expand=True)]),
+                    ft.Container(expand=True),
+                ]),
+                expand=True, bgcolor=ft.Colors.BLACK26, on_click=lambda e: close_confirm_dialog(),
+            )
+            
+            page.overlay.append(confirm_dialog_container)
+            page.update()
+        
+        menu_content = ft.Container(
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Icon(ft.Icons.FOLDER_OPEN, size=55, color=ft.Colors.BLUE_700),
+                    padding=15,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border_radius=50,
+                    #alignment=ft.alignment.center,  # 图标居中
+                ),
+                ft.Text("导入记账数据", size=22, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_700, text_align=ft.TextAlign.CENTER),
+                ft.Divider(),
+                ft.Text("请选择记账Excel文件", size=14, text_align=ft.TextAlign.CENTER),
+                ft.Text("支持格式: .xlsx, .xls", size=12, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
+                ft.Divider(),
+                ft.Button(
+                    "选择文件", 
+                    on_click=lambda e: on_select_file(), 
+                    expand=True,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.BLUE_700,
+                        color=ft.Colors.WHITE,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                ),
+                ft.Button(
+                    "取消", 
+                    on_click=lambda e: on_cancel(), 
+                    expand=True,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.GREY_100,
+                        color=ft.Colors.GREY_700,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                ),
+            ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),  # 水平居中
+            width=320,
+            padding=25,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=20,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.BLACK12,
+                offset=ft.Offset(0, 4),
+            ),
+        )
+        
+        menu_container = ft.Container(
+            content=ft.Column([
+                ft.Container(expand=True),
+                ft.Row([ft.Container(expand=True), menu_content, ft.Container(expand=True)]),
+                ft.Container(expand=True),
+            ]),
+            expand=True, bgcolor=ft.Colors.BLACK26, on_click=lambda e: close_menu(),
+        )
+        
+        page.overlay.append(menu_container)
+        page.update()
+
+    # 导入导出包装函数，增加选择菜单
+    def show_export_menu(e):
+        """显示导出选择菜单"""
+        menu_container = None
+        
+        def close_menu():
+            nonlocal menu_container
+            if menu_container and menu_container in page.overlay:
+                page.overlay.remove(menu_container)
+                menu_container = None
+                page.update()
+        
+        menu_content = ft.Container(
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Icon(ft.Icons.DOWNLOAD, size=48, color=ft.Colors.BLUE_700),
+                    padding=10,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border_radius=50,
+                    #alignment=ft.alignment.center,  # 图标居中
+                ),
+                ft.Text("导出数据", size=20, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                ft.Text("请选择要导出的数据类型", size=12, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
+                ft.Divider(),
+                ft.Button(
+                    "📅 事件列表", 
+                    on_click=lambda e: [close_menu(), asyncio.create_task(export_events_async(e))], 
+                    expand=True,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.BLUE_700,
+                        color=ft.Colors.WHITE,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                ),
+                ft.Button(
+                    "💰 记账列表", 
+                    on_click=lambda e: [close_menu(), asyncio.create_task(export_accounting_async(e))], 
+                    expand=True,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.GREEN_700,
+                        color=ft.Colors.WHITE,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                ),
+                ft.Divider(),
+                ft.TextButton(
+                    "取消", 
+                    on_click=lambda e: close_menu(),
+                    expand=True,
+                    style=ft.ButtonStyle(color=ft.Colors.GREY_600),
+                ),
+            ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=280,
+            padding=20,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=20,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.BLACK12,
+                offset=ft.Offset(0, 4),
+            ),
+        )
+        
+        menu_container = ft.Container(
+            content=ft.Column([
+                ft.Container(expand=True),
+                ft.Row([ft.Container(expand=True), menu_content, ft.Container(expand=True)]),
+                ft.Container(expand=True),
+            ]),
+            expand=True, bgcolor=ft.Colors.BLACK26, on_click=lambda e: close_menu(),
+        )
+        
+        page.overlay.append(menu_container)
+        page.update()
+
+
+    def show_import_menu(e):
+        """显示导入选择菜单"""
+        menu_container = None
+        
+        def close_menu():
+            nonlocal menu_container
+            if menu_container and menu_container in page.overlay:
+                page.overlay.remove(menu_container)
+                menu_container = None
+                page.update()
+        
+        menu_content = ft.Container(
+            content=ft.Column([
+                ft.Container(
+                    content=ft.Icon(ft.Icons.UPLOAD, size=48, color=ft.Colors.BLUE_700),
+                    padding=10,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border_radius=50,
+                    #alignment=ft.alignment.center,  # 图标居中
+                ),
+                ft.Text("导入数据", size=20, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                ft.Text("请选择要导入的数据类型", size=12, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
+                ft.Divider(),
+                ft.Button(
+                    "📅 事件列表", 
+                    on_click=lambda e: [close_menu(), import_events_wrapper(e)], 
+                    expand=True,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.BLUE_700,
+                        color=ft.Colors.WHITE,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                ),
+                ft.Button(
+                    "💰 记账列表", 
+                    on_click=lambda e: [close_menu(), asyncio.create_task(import_accounting_async(e))], 
+                    expand=True,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.GREEN_700,
+                        color=ft.Colors.WHITE,
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                    ),
+                ),
+                ft.Divider(),
+                ft.TextButton(
+                    "取消", 
+                    on_click=lambda e: close_menu(),
+                    expand=True,
+                    style=ft.ButtonStyle(color=ft.Colors.GREY_600),
+                ),
+            ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),  # 添加水平居中
+            width=280,
+            padding=20,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=20,
+            shadow=ft.BoxShadow(
+                spread_radius=1,
+                blur_radius=15,
+                color=ft.Colors.BLACK12,
+                offset=ft.Offset(0, 4),
+            ),
+        )
+        
+        menu_container = ft.Container(
+            content=ft.Column([
+                ft.Container(expand=True),
+                ft.Row([ft.Container(expand=True), menu_content, ft.Container(expand=True)]),
+                ft.Container(expand=True),
+            ]),
+            expand=True, bgcolor=ft.Colors.BLACK26, on_click=lambda e: close_menu(),
+        )
+        
+        page.overlay.append(menu_container)
+        page.update()
 
     # 包装函数
     def import_events_wrapper(e):
@@ -9314,8 +9850,8 @@ def main(page: ft.Page):
 
     # 创建导入导出按钮（始终显示）
     import_export_buttons = ft.Row([
-        ft.TextButton("📥 导入", on_click=import_events_wrapper, tooltip="从Excel导入事件"),
-        ft.TextButton("📤 导出", on_click=export_events_wrapper, tooltip="导出事件到Excel"),
+        ft.TextButton("📥 导入", on_click=show_import_menu, tooltip="从Excel导入事件"),
+        ft.TextButton("📤 导出", on_click=show_export_menu, tooltip="导出事件到Excel"),
         ft.TextButton("💰 记账", on_click=lambda e: show_accounting_page(page), tooltip="记账本"),
         #ft.TextButton("🔔 通知", on_click=test_notification)
     ], spacing=0)
@@ -9516,8 +10052,9 @@ def main(page: ft.Page):
         today = datetime.now().date()
         has_today_event = False
         has_warning_event = False
-
-        print(f"[DEBUG] determine_startup_view 被调用")
+        
+        print(f"[启动视图] ========== 开始检查 ==========")
+        print(f"[启动视图] 当前日期: {today}")
         
         # 检查是否有今日事件（不包括每日和每周事件）
         for event in events.values():
@@ -9525,62 +10062,85 @@ def main(page: ft.Page):
                 continue
 
             month, day, year, base_year, days_until = event.get_next_date_info()
+            print(f"[启动视图] 检查今日事件: {event.name}, 类型: {event.event_type}, 日期: {month}/{day}")
 
             if event.event_type == "monthly":
                 target_day = int(event.birth_date) if event.birth_date else 1
                 if today.day == target_day:
                     has_today_event = True
+                    print(f"[启动视图] ✓ 今日每月事件: {event.name}")
                     break
 
             elif month == today.month and day == today.day:
                 if event.repeat_type == "once":
                     if not event.completed and days_until >= 0:
                         has_today_event = True
+                        print(f"[启动视图] ✓ 今日一次性事件: {event.name}")
                         break
                 else:
                     has_today_event = True
+                    print(f"[启动视图] ✓ 今日生日/纪念日事件: {event.name}")
                     break
         
-        # 检查是否有3日内事件（不包括今天）
+        # ========== 检查预警事件（未来3天内，不包括今天） ==========
+        # 包括：生日、纪念日、每月事件、一次性事件（不包括每日和每周）
         for event in events.values():
+            # 跳过每天事件和每周事件
             if event.event_type == "daily" or event.event_type == "weekly":
                 continue
+            
             month, day, year, base_year, days_until = event.get_next_date_info()
+            print(f"[启动视图] 检查预警事件: {event.name}, 类型: {event.event_type}, 剩余天数: {days_until}")
+            
+            # 一次性事件特殊处理
             if event.repeat_type == "once":
                 if event.completed or days_until < 0:
+                    print(f"[启动视图]   - 跳过（已完成或已过期）")
                     continue
-            if 0 < days_until <= 3:
-                has_warning_event = True
-                break
+            
+            # 每月事件：检查剩余天数
+            if event.event_type == "monthly":
+                if 0 < days_until <= 3:
+                    has_warning_event = True
+                    print(f"[启动视图] ✓ 预警每月事件: {event.name}, {days_until}天后")
+                    break
+            
+            # 生日/纪念日：检查剩余天数
+            elif event.event_type in ["birthday", "event"]:
+                if 0 < days_until <= 3:
+                    has_warning_event = True
+                    print(f"[启动视图] ✓ 预警生日/纪念日: {event.name}, {days_until}天后")
+                    break
+            
+            # 一次性事件：检查剩余天数
+            elif event.repeat_type == "once":
+                if 0 < days_until <= 3:
+                    has_warning_event = True
+                    print(f"[启动视图] ✓ 预警一次性事件: {event.name}, {days_until}天后")
+                    break
         
-        print(f"[启动视图] 今日事件: {has_today_event}, 预警事件: {has_warning_event}")
+        print(f"[启动视图] 结果 - 今日事件: {has_today_event}, 预警事件: {has_warning_event}")
         
         # 根据检查结果设置初始视图
         if has_today_event:
-            if current_view != "today":
-                current_view = "today"
-                # ========== 同步更新下拉框的值 ==========
-                if hasattr(refresh_events_list, 'view_dropdown'):
-                    refresh_events_list.view_dropdown.value = "today"
-                show_today_events()
-                show_bottom_message("📅 今日有事件，自动切换到今日事件视图")
+            current_view = "today"
+            if hasattr(refresh_events_list, 'view_dropdown'):
+                refresh_events_list.view_dropdown.value = "today"
+            show_today_events()
+            show_bottom_message("📅 今日有事件，自动切换到今日事件视图")
         elif has_warning_event:
-            if current_view != "three_days":
-                current_view = "three_days"
-                # ========== 同步更新下拉框的值 ==========
-                if hasattr(refresh_events_list, 'view_dropdown'):
-                    refresh_events_list.view_dropdown.value = "three_days"
-                show_three_days_events()
-                show_bottom_message("⏰ 未来3天有事件，自动切换到预警事件视图")
+            current_view = "three_days"
+            if hasattr(refresh_events_list, 'view_dropdown'):
+                refresh_events_list.view_dropdown.value = "three_days"
+            show_three_days_events()
+            show_bottom_message("⏰ 未来3天有事件，自动切换到预警事件视图")
         else:
             # 没有今日事件和预警事件时，切换到每日事件视图
-            if current_view != "daily":
-                current_view = "daily"
-                # ========== 同步更新下拉框的值 ==========
-                if hasattr(refresh_events_list, 'view_dropdown'):
-                    refresh_events_list.view_dropdown.value = "daily"
-                show_daily_events()
-                show_bottom_message("📆 切换到每日事件视图")
+            current_view = "daily"
+            if hasattr(refresh_events_list, 'view_dropdown'):
+                refresh_events_list.view_dropdown.value = "daily"
+            show_daily_events()
+            show_bottom_message("📆 切换到每日事件视图")
 
         # 强制更新页面
         page.update()
@@ -9759,6 +10319,9 @@ def main(page: ft.Page):
 
     # 手动调用一次，确保初始状态正确
     update_current_playing_info()
+
+    # 然后根据事件情况决定显示什么视图
+    determine_startup_view()
 
     # 延迟2秒后执行首次检查
     debug_log("设置首次检查定时器（2秒后）")
