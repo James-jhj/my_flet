@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.34"
-APP_VERSION_CODE = 34
+APP_VERSION = "1.0.35"
+APP_VERSION_CODE = 35
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -3986,10 +3986,24 @@ def main(page: ft.Page):
         def back_to_main():
             global current_page
             current_page = "main"
+
             # 恢复原来的点击事件
             floating_add_button.on_click = original_floating_add_click
+
             page.clean()
             page.add(main_stack) # 重新添加主界面（包含悬浮按钮）
+
+            # ========== 重置滚动位置和按钮状态 ==========
+            # 滚动到顶部
+            try:
+                page.scroll_to(offset=0, duration=0)  # 瞬间滚动到顶部
+            except:
+                if hasattr(scrollable_content, 'scroll_to'):
+                    asyncio.create_task(scrollable_content.scroll_to(offset=0, duration=0))
+            
+            # 隐藏回到顶部按钮
+            scroll_top_button.visible = False
+            page.update()
 
             # 只有当音乐正在播放或暂停时才刷新播放信息
             if current_music_state in ["playing", "paused"] and current_music_file:
@@ -10077,7 +10091,7 @@ def main(page: ft.Page):
     # 修改 main_content 的顶部部分
     main_content = ft.Column([
         # ========== 固定标题区域 ==========
-        ft.Container(height=15),  # 顶部留白
+        ft.Container(height=20),  # 顶部留白
         
         # 标题
         ft.Container(
