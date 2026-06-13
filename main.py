@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.33"
-APP_VERSION_CODE = 33
+APP_VERSION = "1.0.34"
+APP_VERSION_CODE = 34
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -1530,7 +1530,8 @@ def main(page: ft.Page):
     global music_control_container, playback_buttons, music_section_container  # 修改这里
     global sent_notifications,events_list,filter_date
     global transactions  # 添加这行
-    global current_page, floating_add_button  # 添加这行，用于记录当前页面
+    global current_page, floating_add_button,show_scroll_top_btn  # 添加这行，用于记录当前页面
+    
 
 
     page.window_icon = "icon.png"
@@ -1587,6 +1588,9 @@ def main(page: ft.Page):
 
     # 初始化 filter_date
     filter_date = None
+
+    # 是否显示回到顶部按钮
+    show_scroll_top_btn = False
 
     # 初始化当前页面
     current_page = "main"  # "main" 或 "accounting"
@@ -3156,6 +3160,10 @@ def main(page: ft.Page):
         else:
             for item in daily_events:
                 display_event_card(item["event"], is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
         
         page.update()
         print(f"[show_daily_events] 刷新完成")
@@ -3201,6 +3209,10 @@ def main(page: ft.Page):
         else:
             for item in weekly_events:
                 display_event_card(item["event"], is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
         
         page.update()
 
@@ -3274,6 +3286,10 @@ def main(page: ft.Page):
         else:
             for event, days_until in three_days_events:
                 display_event_card(event, is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
         
         page.update()
     
@@ -3995,7 +4011,7 @@ def main(page: ft.Page):
         refresh_records_list()
         
         accounting_page = ft.Column([
-            ft.Container(height=15),
+            ft.Container(height=12),
             ft.Row([
                 ft.Container(
                     content=back_btn,
@@ -4425,6 +4441,10 @@ def main(page: ft.Page):
         
         for info in all_events_list:
             display_event_card(info["event"], is_filter_mode=True)
+
+        # 移除最后一个多余的分隔符
+        if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+            events_list.controls.pop()
         
         page.update()
 
@@ -4469,6 +4489,10 @@ def main(page: ft.Page):
         else:
             for event in today_events:
                 display_event_card(event, is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
         
         page.update()
 
@@ -4488,57 +4512,120 @@ def main(page: ft.Page):
         
         # ========== 每天事件特殊处理（放在最前面） ==========
         if event.event_type == "daily":
-            # 每天事件：计算距离下一个提醒时间的倒计时
-            if event.reminders:
+            is_workday_only = getattr(event, 'workday_only', False)
+            
+            if is_workday_only:
+                # 工作日提醒：计算下一个工作日的提醒时间
+                now = datetime.now()
                 now_time = now.strftime("%H:%M")
-                next_reminder_time = None
-                is_today_reminder = False
+                is_today_workday = is_workday(now)
                 
-                # 找出下一个提醒时间
-                for reminder in event.reminders:
-                    if reminder.get("enabled"):
-                        reminder_time = reminder.get("time", "")
-                        if reminder_time:
-                            if reminder_time > now_time:
-                                # 今天的提醒还没到
-                                next_reminder_time = reminder_time
-                                is_today_reminder = True
-                                break
-                            elif not next_reminder_time:
-                                # 记录第一个提醒时间（用于明天）
-                                next_reminder_time = reminder_time
+                # 获取第一个提醒时间
+                reminder_time = None
+                if event.reminders:
+                    for reminder in event.reminders:
+                        if reminder.get("enabled"):
+                            reminder_time = reminder.get("time", "")
+                            break
                 
-                if next_reminder_time:
-                    if is_today_reminder:
-                        # 计算今天的时间差
-                        reminder_hour, reminder_minute = map(int, next_reminder_time.split(":"))
-                        reminder_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
-                        time_diff = reminder_datetime - now
-                        
-                        if time_diff.total_seconds() > 0:
-                            hours = int(time_diff.total_seconds() // 3600)
-                            minutes = int((time_diff.total_seconds() % 3600) // 60)
-                            if hours > 0:
-                                if minutes > 0:
-                                    status_text = f"{next_reminder_time} ({hours}小时{minutes}分后)"
-                                else:
-                                    status_text = f"{next_reminder_time} ({hours}小时后)"
-                            else:
-                                status_text = f"{next_reminder_time} ({minutes}分钟后)"
-                            status_color = ft.Colors.BLUE_700
-                        else:
-                            status_text = f"{next_reminder_time} (已过)"
-                            status_color = ft.Colors.GREY_500
+                if reminder_time:
+                    reminder_hour, reminder_minute = map(int, reminder_time.split(":"))
+                    
+                    # 计算目标提醒的日期时间
+                    target_datetime = None
+                    
+                    if is_today_workday and reminder_time > now_time:
+                        # 今天是工作日且提醒时间还没到，使用今天
+                        target_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
                     else:
-                        # 明天的提醒
-                        status_text = f"明天 {next_reminder_time}"
-                        status_color = ft.Colors.ORANGE_700
+                        # 今天不是工作日或提醒时间已过，找下一个工作日
+                        days_offset = 1
+                        next_date = now + timedelta(days=days_offset)
+                        while not is_workday(next_date):
+                            days_offset += 1
+                            next_date = now + timedelta(days=days_offset)
+                        target_datetime = datetime(next_date.year, next_date.month, next_date.day, reminder_hour, reminder_minute)
+                    
+                    # 计算时间差
+                    time_diff = target_datetime - now
+                    
+                    if time_diff.total_seconds() > 0:
+                        total_seconds = int(time_diff.total_seconds())
+                        days = total_seconds // 86400
+                        hours = (total_seconds % 86400) // 3600
+                        minutes = (total_seconds % 3600) // 60
+                        
+                        if days > 0:
+                            if hours > 0 and minutes > 0:
+                                status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
+                            elif hours > 0:
+                                status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
+                            else:
+                                status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
+                        elif hours > 0:
+                            if minutes > 0:
+                                status_text = f"{hours} 小时 {minutes} 分钟后"
+                            else:
+                                status_text = f"{hours} 小时后"
+                        else:
+                            if minutes > 0:
+                                status_text = f"{minutes} 分钟后"
+                            else:
+                                status_text = f"即将"
+                        status_color = ft.Colors.BLUE_700
+                    else:
+                        status_text = f"已过"
+                        status_color = ft.Colors.GREY_500
+                else:
+                    status_text = "工作日"
+                    status_color = ft.Colors.BLUE_700
+            else:
+                # 普通每天提醒：原来的逻辑
+                if event.reminders:
+                    now_time = now.strftime("%H:%M")
+                    next_reminder_time = None
+                    is_today_reminder = False
+                    
+                    for reminder in event.reminders:
+                        if reminder.get("enabled"):
+                            reminder_time = reminder.get("time", "")
+                            if reminder_time:
+                                if reminder_time > now_time:
+                                    next_reminder_time = reminder_time
+                                    is_today_reminder = True
+                                    break
+                                elif not next_reminder_time:
+                                    next_reminder_time = reminder_time
+                    
+                    if next_reminder_time:
+                        if is_today_reminder:
+                            reminder_hour, reminder_minute = map(int, next_reminder_time.split(":"))
+                            reminder_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
+                            time_diff = reminder_datetime - now
+                            
+                            if time_diff.total_seconds() > 0:
+                                hours = int(time_diff.total_seconds() // 3600)
+                                minutes = int((time_diff.total_seconds() % 3600) // 60)
+                                if hours > 0:
+                                    if minutes > 0:
+                                        status_text = f"{hours} 小时 {minutes} 分钟后"
+                                    else:
+                                        status_text = f"{hours} 小时后"
+                                else:
+                                    status_text = f"{minutes} 分钟后"
+                                status_color = ft.Colors.BLUE_700
+                            else:
+                                status_text = f"已过"
+                                status_color = ft.Colors.GREY_500
+                        else:
+                            status_text = f"明天"
+                            status_color = ft.Colors.ORANGE_700
+                    else:
+                        status_text = "每天"
+                        status_color = ft.Colors.PURPLE_700
                 else:
                     status_text = "每天"
                     status_color = ft.Colors.PURPLE_700
-            else:
-                status_text = "每天"
-                status_color = ft.Colors.PURPLE_700
         
         # ========== 其他事件类型 ==========
         elif event.event_type == "weekly":
@@ -4716,9 +4803,15 @@ def main(page: ft.Page):
                     ], spacing=10),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ], spacing=5),
-            padding=10, bgcolor=bg_color, border_radius=10,
+            padding=10, 
+            bgcolor=bg_color, 
+            border_radius=10,
+            #border=ft.border.Border(bottom=ft.border.BorderSide(1, ft.Colors.GREY_200)),  # 底部边框作为分隔
         )
+
+        # 添加卡片和分隔符
         events_list.controls.append(event_card)
+        events_list.controls.append(ft.Divider(height=1, color=ft.Colors.GREY_200))
 
     def get_event_icon(event):
         """获取事件图标"""
@@ -4885,6 +4978,11 @@ def main(page: ft.Page):
         else:
             for item in monthly_events:
                 display_event_card(item["event"], is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
+
         page.update()
 
     def show_birthday_events():
@@ -4929,6 +5027,10 @@ def main(page: ft.Page):
         else:
             for item in birthday_events:
                 display_event_card(item["event"], is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
         
         page.update()
         
@@ -4976,6 +5078,10 @@ def main(page: ft.Page):
             for item in event_events_list:
                 display_event_card(item["event"], is_filter_mode=True)
 
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
+
         page.update()
 
     def show_once_events():
@@ -5020,6 +5126,10 @@ def main(page: ft.Page):
         else:
             for item in once_events_list:
                 display_event_card(item["event"], is_filter_mode=True)
+
+            # 移除最后一个多余的分隔符
+            if events_list.controls and isinstance(events_list.controls[-1], ft.Divider):
+                events_list.controls.pop()
         
         page.update()
 
@@ -9900,6 +10010,70 @@ def main(page: ft.Page):
     music_control_container.visible = True
     #playback_buttons.visible=True
 
+    # ========== 可滚动的内容区域（其他所有内容） ==========
+    scrollable_content =ft.Column(
+        [
+        
+            # 顶部留白
+            #ft.Container(height=5),
+            
+            # 日历和事件提醒组合
+            ft.Column([
+                calendar_widget,
+                #ft.Container(height=5),
+                date_text,
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            
+            ft.Divider(),  # 音乐区域上方的分割线
+
+            # 音乐相关区域（整个区域统一控制显示/隐藏）
+            music_section_container,
+
+            # 所有按钮行（播放控制按钮 + 导入导出按钮）
+            ft.Row([
+                playback_buttons,
+                import_export_buttons,
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=0),
+
+            ft.Divider(),
+            
+            # 事件列表（移除自己的滚动，让外层统一滚动）
+            events_list, # 这里不再设置 scroll，让内容自然扩展
+            
+            ft.Divider(),
+            
+            # 底部信息
+            ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Text("", size=16),
+                        start_time_text,
+                    ], spacing=5),
+                    ft.Row([
+                        ft.Text("", size=16),
+                        run_time_text,
+                    ], spacing=5),
+                    ft.Row([
+                        ft.Text("", size=16),
+                        current_datetime_text,
+                    ], spacing=5),
+                    ft.Divider(height=5),
+                    ft.Text("💡 使用说明", size=14, weight=ft.FontWeight.BOLD),
+                    ft.Text("• 点击「+」添加事件\n• 各类事件当天或提前3天预警自动弹框并播放音乐\n• 启动程序自动检查今日是否有事件发生", selectable=True),
+                    ft.Row([ft.Text("🔔 提醒服务运行中", size=12, color=ft.Colors.GREEN_700), count_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Row([
+                        ft.Text(f"📱 版本 {APP_VERSION}", size=10, color=ft.Colors.GREY_500),
+                    ], spacing=5),
+                ]),
+                padding=12,
+            ),
+        ], 
+        spacing=8, 
+        scroll=ft.ScrollMode.AUTO,
+        on_scroll=lambda e: on_scroll_changed(e),
+    )
+
+
     # 修改 main_content 的顶部部分
     main_content = ft.Column([
         # ========== 固定标题区域 ==========
@@ -9922,66 +10096,53 @@ def main(page: ft.Page):
 
         ft.Divider(),
 
-        # ========== 可滚动的内容区域（其他所有内容） ==========
+        # 可滚动的内容区域
         ft.Container(
-            content=ft.Column([
-                # 顶部留白
-                #ft.Container(height=5),
-                
-                # 日历和事件提醒组合
-                ft.Column([
-                    calendar_widget,
-                    #ft.Container(height=5),
-                    date_text,
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                
-                ft.Divider(),  # 音乐区域上方的分割线
-
-                # 音乐相关区域（整个区域统一控制显示/隐藏）
-                music_section_container,
-
-                # 所有按钮行（播放控制按钮 + 导入导出按钮）
-                ft.Row([
-                    playback_buttons,
-                    import_export_buttons,
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=0),
-
-                ft.Divider(),
-                
-                # 事件列表（移除自己的滚动，让外层统一滚动）
-                events_list, # 这里不再设置 scroll，让内容自然扩展
-                
-                ft.Divider(),
-                
-                # 底部信息
-                ft.Container(
-                    content=ft.Column([
-                        ft.Row([
-                            ft.Text("", size=16),
-                            start_time_text,
-                        ], spacing=5),
-                        ft.Row([
-                            ft.Text("", size=16),
-                            run_time_text,
-                        ], spacing=5),
-                        ft.Row([
-                            ft.Text("", size=16),
-                            current_datetime_text,
-                        ], spacing=5),
-                        ft.Divider(height=5),
-                        ft.Text("💡 使用说明", size=14, weight=ft.FontWeight.BOLD),
-                        ft.Text("• 点击「+」添加事件\n• 各类事件当天或提前3天预警自动弹框并播放音乐\n• 启动程序自动检查今日是否有事件发生", selectable=True),
-                        ft.Row([ft.Text("🔔 提醒服务运行中", size=12, color=ft.Colors.GREEN_700), count_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        ft.Row([
-                            ft.Text(f"📱 版本 {APP_VERSION}", size=10, color=ft.Colors.GREY_500),
-                        ], spacing=5),
-                    ]),
-                    padding=12,
-                ),
-            ], spacing=8, scroll=ft.ScrollMode.AUTO),  # ✅ 将 scroll 移到 Column 上
-            expand=True,  # 占据剩余空间
+            content=scrollable_content,
+            expand=True,
         ),
     ], spacing=0, expand=True)
+
+    # 创建回到顶部按钮
+    scroll_top_button = ft.Container(
+        content=ft.Icon(ft.Icons.ARROW_UPWARD, size=28, color=ft.Colors.WHITE),  # 图标大小改为28
+        bgcolor=ft.Colors.BLUE_700,
+        border_radius=30,
+        padding=14,  # 与添加按钮相同的内边距
+        ink=True,
+        on_click=lambda e: asyncio.create_task(scroll_to_top(e)),  # 使用 asyncio.create_task
+        tooltip="回到顶部",
+        shadow=ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=10,
+            color=ft.Colors.BLACK26,
+            offset=ft.Offset(0, 2),
+        ),
+        visible=False,
+    )
+
+    def on_scroll_changed(e):
+        """滚动事件回调"""
+        global show_scroll_top_btn
+        
+        # 获取滚动位置
+        scroll_offset = e.pixels if hasattr(e, 'pixels') else 0
+        
+        # 只要滚动超过0像素（即滑动了）就显示回到顶部按钮
+        if scroll_offset > 0 and not show_scroll_top_btn:
+            show_scroll_top_btn = True
+            scroll_top_button.visible = True
+            page.update()
+        elif scroll_offset == 0 and show_scroll_top_btn:
+            show_scroll_top_btn = False
+            scroll_top_button.visible = False
+            page.update()
+
+    async def scroll_to_top(e):
+        """滚动到顶部"""
+        if hasattr(scrollable_content, 'scroll_to'):
+            await scrollable_content.scroll_to(offset=0, duration=500, curve=ft.AnimationCurve.EASE_IN_OUT)
+            page.update()
 
     # 创建返回今天按钮
     today_circle_button = ft.Container(
@@ -10043,6 +10204,7 @@ def main(page: ft.Page):
     # 悬浮按钮组
     floating_buttons = ft.Column(
         [
+            scroll_top_button,      # 回到顶部按钮（放在最上面）
             today_circle_button,
             floating_add_button,
         ],
