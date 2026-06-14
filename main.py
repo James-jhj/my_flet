@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.35"
-APP_VERSION_CODE = 35
+APP_VERSION = "1.0.36"
+APP_VERSION_CODE = 36
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -2127,11 +2127,14 @@ def main(page: ft.Page):
         if current_playing_event_id and current_playing_event_id in events:
             event = events[current_playing_event_id]
             if event.sound_file and os.path.exists(event.sound_file):
-                music_name = get_music_name_from_file(event.sound_file)
-                if music_name:
-                    song_title = music_name
-                else:
-                    song_title = event.name
+                # 直接去掉扩展名，显示完整文件名
+                base_name = os.path.basename(event.sound_file)
+                song_title = os.path.splitext(base_name)[0]
+        else:
+            # 试听模式
+            if current_music_file and os.path.exists(current_music_file):
+                base_name = os.path.basename(current_music_file)
+                song_title = os.path.splitext(base_name)[0]
         
         # 创建播放/暂停按钮
         play_button = ft.IconButton(
@@ -9904,7 +9907,9 @@ def main(page: ft.Page):
             
             # 获取音乐名称
             if current_music_file and os.path.exists(current_music_file):
-                music_name = get_full_music_name(current_music_file)
+                # 直接去掉扩展名，显示完整文件名
+                base_name = os.path.basename(current_music_file)
+                music_name = os.path.splitext(base_name)[0]
             else:
                 music_name = "未知音乐"
             
