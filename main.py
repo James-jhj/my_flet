@@ -35,8 +35,8 @@ import uuid
 import sys
 
 # ========== 2. 版本信息 ==========
-APP_VERSION = "1.0.36"
-APP_VERSION_CODE = 36
+APP_VERSION = "1.0.37"
+APP_VERSION_CODE = 37
 # =============================
 
 # ========== 3. 设备绑定功能 ==========
@@ -4513,204 +4513,229 @@ def main(page: ft.Page):
         
         page.update()
 
-    def display_event_card(event, is_filter_mode=False):
+    def display_event_card(event, is_filter_mode=False, custom_days_until=None):
         """显示单个事件卡片"""
         global current_playing_event_id, current_music_state
         
         today = datetime.now().date()
         now = datetime.now()
-        month, day, year, base_year, days_until = event.get_next_date_info()
-
-        # ========== 统一背景色和状态文字颜色 ==========
-        # 所有卡片使用统一的白色背景，状态文字使用灰色
+        base_year = 0
+        month, day = 1, 1
         bg_color = ft.Colors.WHITE
-        status_color = ft.Colors.GREY_600
-        status_text = ""
-        
-        # ========== 每天事件特殊处理（放在最前面） ==========
-        if event.event_type == "daily":
-            is_workday_only = getattr(event, 'workday_only', False)
-            
-            if is_workday_only:
-                # 工作日提醒：计算下一个工作日的提醒时间
-                now = datetime.now()
-                now_time = now.strftime("%H:%M")
-                is_today_workday = is_workday(now)
-                
-                # 获取第一个提醒时间
-                reminder_time = None
-                if event.reminders:
-                    for reminder in event.reminders:
-                        if reminder.get("enabled"):
-                            reminder_time = reminder.get("time", "")
-                            break
-                
-                if reminder_time:
-                    reminder_hour, reminder_minute = map(int, reminder_time.split(":"))
-                    
-                    # 计算目标提醒的日期时间
-                    target_datetime = None
-                    
-                    if is_today_workday and reminder_time > now_time:
-                        # 今天是工作日且提醒时间还没到，使用今天
-                        target_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
-                    else:
-                        # 今天不是工作日或提醒时间已过，找下一个工作日
-                        days_offset = 1
-                        next_date = now + timedelta(days=days_offset)
-                        while not is_workday(next_date):
-                            days_offset += 1
-                            next_date = now + timedelta(days=days_offset)
-                        target_datetime = datetime(next_date.year, next_date.month, next_date.day, reminder_hour, reminder_minute)
-                    
-                    # 计算时间差
-                    time_diff = target_datetime - now
-                    
-                    if time_diff.total_seconds() > 0:
-                        total_seconds = int(time_diff.total_seconds())
-                        days = total_seconds // 86400
-                        hours = (total_seconds % 86400) // 3600
-                        minutes = (total_seconds % 3600) // 60
-                        
-                        if days > 0:
-                            if hours > 0 and minutes > 0:
-                                status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
-                            elif hours > 0:
-                                status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
-                            else:
-                                status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
-                        elif hours > 0:
-                            if minutes > 0:
-                                status_text = f"{hours} 小时 {minutes} 分钟后"
-                            else:
-                                status_text = f"{hours} 小时后"
-                        else:
-                            if minutes > 0:
-                                status_text = f"{minutes} 分钟后"
-                            else:
-                                status_text = f"即将"
-                        status_color = ft.Colors.BLUE_700
-                    else:
-                        status_text = f"已过"
-                        status_color = ft.Colors.GREY_500
-                else:
-                    status_text = "工作日"
-                    status_color = ft.Colors.BLUE_700
-            else:
-                # 普通每天提醒：原来的逻辑
-                if event.reminders:
-                    now_time = now.strftime("%H:%M")
-                    next_reminder_time = None
-                    is_today_reminder = False
-                    
-                    for reminder in event.reminders:
-                        if reminder.get("enabled"):
-                            reminder_time = reminder.get("time", "")
-                            if reminder_time:
-                                if reminder_time > now_time:
-                                    next_reminder_time = reminder_time
-                                    is_today_reminder = True
-                                    break
-                                elif not next_reminder_time:
-                                    next_reminder_time = reminder_time
-                    
-                    if next_reminder_time:
-                        if is_today_reminder:
-                            reminder_hour, reminder_minute = map(int, next_reminder_time.split(":"))
-                            reminder_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
-                            time_diff = reminder_datetime - now
-                            
-                            if time_diff.total_seconds() > 0:
-                                hours = int(time_diff.total_seconds() // 3600)
-                                minutes = int((time_diff.total_seconds() % 3600) // 60)
-                                if hours > 0:
-                                    if minutes > 0:
-                                        status_text = f"{hours} 小时 {minutes} 分钟后"
-                                    else:
-                                        status_text = f"{hours} 小时后"
-                                else:
-                                    status_text = f"{minutes} 分钟后"
-                                status_color = ft.Colors.BLUE_700
-                            else:
-                                status_text = f"已过"
-                                status_color = ft.Colors.GREY_500
-                        else:
-                            status_text = f"明天"
-                            status_color = ft.Colors.ORANGE_700
-                    else:
-                        status_text = "每天"
-                        status_color = ft.Colors.PURPLE_700
-                else:
-                    status_text = "每天"
-                    status_color = ft.Colors.PURPLE_700
-        
-        # ========== 其他事件类型 ==========
-        elif event.event_type == "weekly":
-            if days_until == 0:
-                status_text = "今天"
-                status_color = ft.Colors.RED_700
-            elif days_until == 1:
-                status_text = "明天"
-                status_color = ft.Colors.ORANGE_700
-            else:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.BLUE_700
-        
-        elif event.repeat_type == "once":
-            if event.completed:
-                status_text = "已完成"
-                status_color = ft.Colors.GREY_500
-            elif days_until < 0:
+
+        # 优先使用自定义天数
+        if custom_days_until is not None:
+            days_until = custom_days_until
+        else:
+            month, day, year, base_year, days_until = event.get_next_date_info()
+
+        # ========== 确定状态文本和颜色 ==========
+        if custom_days_until is not None:
+            # 筛选模式
+            if days_until == -1:
                 status_text = "已过期"
                 status_color = ft.Colors.GREY_500
             elif days_until == 0:
                 status_text = "今天"
                 status_color = ft.Colors.RED_700
             else:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.ORANGE_700
-        
-        elif event.event_type == "monthly":
-            if days_until == 0:
-                status_text = "今天"
-                status_color = ft.Colors.RED_700
-            elif days_until == 1:
-                status_text = "明天"
-                status_color = ft.Colors.ORANGE_700
-            else:
-                status_text = f"{days_until}天后"
+                status_text = f"还剩 {days_until} 天"
                 status_color = ft.Colors.BLUE_700
-        
-        elif event.event_type == "birthday":
-            if days_until == 0:
-                status_text = "今天"
-                status_color = ft.Colors.RED_700
-            elif days_until <= 7:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.ORANGE_700
-            else:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.BLUE_700
-        
-        elif event.event_type == "event":
-            if days_until == 0:
-                status_text = "今天"
-                status_color = ft.Colors.RED_700
-            elif days_until <= 7:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.ORANGE_700
-            else:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.BLUE_700
-        
+
         else:
-            # 筛选模式或其他
-            if days_until == 0:
-                status_text = "今天"
-                status_color = ft.Colors.RED_700
+
+        # ========== 统一背景色和状态文字颜色 ==========
+        # 所有卡片使用统一的白色背景，状态文字使用灰色
+
+            status_color = ft.Colors.GREY_600
+            status_text = ""
+
+            
+            
+            # ========== 每天事件特殊处理（放在最前面） ==========
+            if event.event_type == "daily":
+                is_workday_only = getattr(event, 'workday_only', False)
+                
+                if is_workday_only:
+                    # 工作日提醒：计算下一个工作日的提醒时间
+                    now = datetime.now()
+                    now_time = now.strftime("%H:%M")
+                    is_today_workday = is_workday(now)
+                    
+                    # 获取第一个提醒时间
+                    reminder_time = None
+                    if event.reminders:
+                        for reminder in event.reminders:
+                            if reminder.get("enabled"):
+                                reminder_time = reminder.get("time", "")
+                                break
+                    
+                    if reminder_time:
+                        reminder_hour, reminder_minute = map(int, reminder_time.split(":"))
+                        
+                        # 计算目标提醒的日期时间
+                        target_datetime = None
+                        
+                        if is_today_workday and reminder_time > now_time:
+                            # 今天是工作日且提醒时间还没到，使用今天
+                            target_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
+                        else:
+                            # 今天不是工作日或提醒时间已过，找下一个工作日
+                            days_offset = 1
+                            next_date = now + timedelta(days=days_offset)
+                            while not is_workday(next_date):
+                                days_offset += 1
+                                next_date = now + timedelta(days=days_offset)
+                            target_datetime = datetime(next_date.year, next_date.month, next_date.day, reminder_hour, reminder_minute)
+                        
+                        # 计算时间差
+                        time_diff = target_datetime - now
+                        
+                        if time_diff.total_seconds() > 0:
+                            total_seconds = int(time_diff.total_seconds())
+                            days = total_seconds // 86400
+                            hours = (total_seconds % 86400) // 3600
+                            minutes = (total_seconds % 3600) // 60
+                            
+                            if days > 0:
+                                if hours > 0 and minutes > 0:
+                                    status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
+                                elif hours > 0:
+                                    status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
+                                else:
+                                    status_text = f"{days} 天 {hours} 小时 {minutes} 分钟后"
+                            elif hours > 0:
+                                if minutes > 0:
+                                    status_text = f"{hours} 小时 {minutes} 分钟后"
+                                else:
+                                    status_text = f"{hours} 小时后"
+                            else:
+                                if minutes > 0:
+                                    status_text = f"{minutes} 分钟后"
+                                else:
+                                    status_text = f"即将"
+                            status_color = ft.Colors.BLUE_700
+                        else:
+                            status_text = f"已过"
+                            status_color = ft.Colors.GREY_500
+                    else:
+                        status_text = "工作日"
+                        status_color = ft.Colors.BLUE_700
+                else:
+                    # 普通每天提醒：原来的逻辑
+                    if event.reminders:
+                        now_time = now.strftime("%H:%M")
+                        next_reminder_time = None
+                        is_today_reminder = False
+                        
+                        for reminder in event.reminders:
+                            if reminder.get("enabled"):
+                                reminder_time = reminder.get("time", "")
+                                if reminder_time:
+                                    if reminder_time > now_time:
+                                        next_reminder_time = reminder_time
+                                        is_today_reminder = True
+                                        break
+                                    elif not next_reminder_time:
+                                        next_reminder_time = reminder_time
+                        
+                        if next_reminder_time:
+                            if is_today_reminder:
+                                reminder_hour, reminder_minute = map(int, next_reminder_time.split(":"))
+                                reminder_datetime = datetime(now.year, now.month, now.day, reminder_hour, reminder_minute)
+                                time_diff = reminder_datetime - now
+                                
+                                if time_diff.total_seconds() > 0:
+                                    hours = int(time_diff.total_seconds() // 3600)
+                                    minutes = int((time_diff.total_seconds() % 3600) // 60)
+                                    if hours > 0:
+                                        if minutes > 0:
+                                            status_text = f"{hours} 小时 {minutes} 分钟后"
+                                        else:
+                                            status_text = f"{hours} 小时后"
+                                    else:
+                                        status_text = f"{minutes} 分钟后"
+                                    status_color = ft.Colors.BLUE_700
+                                else:
+                                    status_text = f"已过"
+                                    status_color = ft.Colors.GREY_500
+                            else:
+                                status_text = f"明天"
+                                status_color = ft.Colors.ORANGE_700
+                        else:
+                            status_text = "每天"
+                            status_color = ft.Colors.PURPLE_700
+                    else:
+                        status_text = "每天"
+                        status_color = ft.Colors.PURPLE_700
+            
+            # ========== 其他事件类型 ==========
+            elif event.event_type == "weekly":
+                if days_until == 0:
+                    status_text = "今天"
+                    status_color = ft.Colors.RED_700
+                elif days_until == 1:
+                    status_text = "明天"
+                    status_color = ft.Colors.ORANGE_700
+                else:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.BLUE_700
+            
+            elif event.repeat_type == "once":
+                if event.completed:
+                    status_text = "已完成"
+                    status_color = ft.Colors.GREY_500
+                elif days_until < 0:
+                    status_text = "已过期"
+                    status_color = ft.Colors.GREY_500
+                elif days_until == 0:
+                    status_text = "今天"
+                    status_color = ft.Colors.RED_700
+                else:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.ORANGE_700
+            
+            elif event.event_type == "monthly":
+                if days_until == 0:
+                    status_text = "今天"
+                    status_color = ft.Colors.RED_700
+                elif days_until == 1:
+                    status_text = "明天"
+                    status_color = ft.Colors.ORANGE_700
+                else:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.BLUE_700
+            
+            elif event.event_type == "birthday":
+                if days_until == 0:
+                    status_text = "今天"
+                    status_color = ft.Colors.RED_700
+                elif days_until <= 7:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.ORANGE_700
+                else:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.BLUE_700
+            
+            elif event.event_type == "event":
+                if days_until == 0:
+                    status_text = "今天"
+                    status_color = ft.Colors.RED_700
+                elif days_until <= 7:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.ORANGE_700
+                else:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.BLUE_700
+            
             else:
-                status_text = f"{days_until}天后"
-                status_color = ft.Colors.BLUE_700
+                # 筛选模式或其他
+                if days_until == 0:
+                    status_text = "今天"
+                    status_color = ft.Colors.RED_700
+                else:
+                    status_text = f"{days_until}天后"
+                    status_color = ft.Colors.BLUE_700
         
         # 创建状态容器
         if status_text:
@@ -5318,24 +5343,19 @@ def main(page: ft.Page):
                 if event.event_type == "daily" or event.repeat_type == "daily":
                     continue
                 
-                # 每周事件特殊处理
-                if event.event_type == "weekly" or event.repeat_type == "weekly":
-                    target_weekday = int(event.birth_date)
-                    if filter_date.isoweekday() == target_weekday:
-                        filtered_events.append(event)
+                # 使用 is_event_on_date 方法判断事件是否在指定日期发生
+                if event.is_event_on_date(filter_date):
+                    # 计算从今天到选中日期的天数
+                    days_until = (filter_date - today).days
 
-                # 每月事件处理
-                elif event.event_type == "monthly" or event.repeat_type == "monthly":
-                    target_day = int(event.birth_date)
-                    if filter_date.day == target_day:
-                        filtered_events.append(event)
-
-                else:
-                    # 其他事件使用原逻辑
-                    month, day, year, base_year, days_until = event.get_next_date_info()
-                    if month == filter_date.month and day == filter_date.day:
-                        filtered_events.append(event)
+                    # 如果选中日期已经过了今天，标记为已过期（-1）
+                    if days_until < 0:
+                        days_until = -1
+                    
+                    # 如果选中日期已经过了，显示负数
+                    filtered_events.append((event, days_until))
             
+            # 显示筛选结果
             events_list.controls.clear()
             
             # 始终显示返回按钮/下拉框
@@ -5367,8 +5387,9 @@ def main(page: ft.Page):
                 events_list.controls.append(ft.Text(f"✨ 当天有 {len(filtered_events)} 个事件", 
                                                     size=14, color=ft.Colors.GREEN_700))
                 events_list.controls.append(ft.Divider(height=5))
-                for event in filtered_events:
-                    display_event_card(event, is_filter_mode=True)
+                for event, days_until in filtered_events:
+                    # 直接传递 days_until 参数
+                    display_event_card(event, is_filter_mode=True, custom_days_until=days_until)
             
             update_event_count()
             page.update()
@@ -10078,7 +10099,7 @@ def main(page: ft.Page):
                     ], spacing=5),
                     ft.Divider(height=5),
                     ft.Text("💡 使用说明", size=14, weight=ft.FontWeight.BOLD),
-                    ft.Text("• 点击「+」添加事件\n• 各类事件当天或提前3天预警自动弹框并播放音乐\n• 启动程序自动检查今日是否有事件发生", selectable=True),
+                    ft.Text("• 点击「+」添加事件\n• 点击 💰 记账 进入记账本界面\n• 各类事件当天或提前3天预警自动弹框并播放音乐\n• 启动程序自动检查今日是否有事件发生", selectable=True),
                     ft.Row([ft.Text("🔔 提醒服务运行中", size=12, color=ft.Colors.GREEN_700), count_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Row([
                         ft.Text(f"📱 版本 {APP_VERSION}", size=10, color=ft.Colors.GREY_500),
